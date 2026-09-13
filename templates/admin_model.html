@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Predictive Model{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('admin_dashboard') }}">← Admin</a></div>
+<div class="page-title"><h1>Predictive model — logistic regression</h1></div>
+<p class="subtext">
+  Trained on a synthetic stand-in for historical outcomes (past enrollments with a known
+  pass/fail-or-withdraw result). In production this would train on the institution's own
+  historical records. It currently runs in <strong>shadow mode</strong>: every enrollment gets
+  scored by both engines, but the rule-based score in <code>risk_engine.py</code> is what drives
+  notifications, so this model can be watched and validated before being trusted to trigger
+  alerts on its own.
+</p>
+
+<div class="stat-row">
+  <div class="stat"><div class="num">{{ (metrics.accuracy*100)|round(1) }}%</div><div class="label">Accuracy</div></div>
+  <div class="stat"><div class="num">{{ (metrics.roc_auc*100)|round(1) }}%</div><div class="label">ROC-AUC</div></div>
+  <div class="stat"><div class="num">{{ (metrics.precision*100)|round(1) }}%</div><div class="label">Precision</div></div>
+  <div class="stat"><div class="num">{{ (metrics.recall*100)|round(1) }}%</div><div class="label">Recall</div></div>
+  <div class="stat"><div class="num">{{ (metrics.f1*100)|round(1) }}%</div><div class="label">F1 score</div></div>
+</div>
+
+<div class="panel">
+  <h3>Agreement with the rule-based score</h3>
+  <p class="subtext">Across {{ agreement.total }} currently scored enrollments, the two engines agree on
+    the risk band {{ agreement.agree_pct }}% of the time ({{ agreement.agree }} of {{ agreement.total }}).</p>
+  <div class="breakdown-row"><span>ML flags High, rule-based says Low</span><span>{{ agreement.ml_high_rule_low }}</span></div>
+  <div class="breakdown-row"><span>Rule-based flags High, ML says Low</span><span>{{ agreement.rule_high_ml_low }}</span></div>
+  <p class="subtext" style="margin-top:10px;">Disagreements like these are exactly what a shadow-mode period
+    is for — each one is worth a human review to see which engine (or which feature) got it right before
+    switching a model over to drive live alerts.</p>
+</div>
+
+<div class="panel">
+  <h3>Confusion matrix <span class="subtext">(on held-out test data, {{ metrics.test_size }} records)</span></h3>
+  <table style="max-width:420px;">
+    <thead><tr><th></th><th>Predicted: not at risk</th><th>Predicted: at risk</th></tr></thead>
+    <tbody>
+      <tr><th>Actual: not at risk</th><td>{{ metrics.confusion_matrix[0][0] }} (TN)</td><td>{{ metrics.confusion_matrix[0][1] }} (FP)</td></tr>
+      <tr><th>Actual: at risk</th><td>{{ metrics.confusion_matrix[1][0] }} (FN)</td><td>{{ metrics.confusion_matrix[1][1] }} (TP)</td></tr>
+    </tbody>
+  </table>
+  <p class="subtext" style="margin-top:10px;">Base rate of the training data: {{ (metrics.base_rate*100)|round(1) }}%
+    of historical enrollments ended in failure or withdrawal.</p>
+</div>
+
+<div class="panel">
+  <h3>Feature coefficients</h3>
+  <p class="subtext">Standardized logistic-regression coefficients — how much each signal pushes the
+    predicted risk up (positive) or down (negative), holding the others constant.</p>
+  {% for feature, coef in metrics.coefficients.items() %}
+  <div class="breakdown-row">
+    <span style="text-transform:capitalize">{{ feature.replace('_',' ') }}</span>
+    <span style="display:flex; align-items:center; gap:8px; width:260px;">
+      <span class="meter" style="width:160px;">
+        <span style="width:{{ (coef|abs / 1.5 * 100)|round(0)|int if (coef|abs / 1.5 * 100) < 100 else 100 }}%; background:{{ 'var(--high)' if coef > 0 else 'var(--low)' }};"></span>
+      </span>
+      <strong>{{ coef }}</strong>
+    </span>
+  </div>
+  {% endfor %}
+  <p class="subtext" style="margin-top:10px;">Intercept: {{ metrics.intercept }}</p>
+</div>
+
+<div class="panel">
+  <h3>Retrain</h3>
+  <p class="subtext">Regenerates the synthetic historical dataset and retrains, then re-scores every
+    current enrollment with the new model.</p>
+  <form method="post" action="{{ url_for('admin_model_train') }}" class="btn-row" style="align-items:center;">
+    <input type="text" name="n" value="3000" style="width:120px;">
+    <button class="btn" type="submit">Retrain model</button>
+  </form>
+</div>
+{% endblock %}

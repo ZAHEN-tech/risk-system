@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ lecturer.full_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('admin_lecturers_list') }}">← Lecturer management</a></div>
+<div class="page-title">
+  <h1>{{ lecturer.full_name }}</h1>
+  <div class="btn-row">
+    <a class="btn secondary" href="{{ url_for('admin_lecturer_edit', lecturer_id=lecturer.id) }}">Edit details</a>
+    <form method="post" action="{{ url_for('admin_lecturer_toggle_active', lecturer_id=lecturer.id) }}">
+      <button class="btn secondary" type="submit">{{ 'Deactivate account' if lecturer.active else 'Reactivate account' }}</button>
+    </form>
+  </div>
+</div>
+
+<p class="subtext">
+  {{ lecturer.department.name if lecturer.department else 'No department' }}
+  · Login: <strong>{{ lecturer.username }}</strong>
+  · Status: {% if lecturer.active %}Active{% else %}<strong style="color:var(--high)">Deactivated</strong>{% endif %}
+  {% if lecturer.email %} · {{ lecturer.email }}{% endif %}
+</p>
+
+<div class="panel">
+  <h3>Account access</h3>
+  <form method="post" action="{{ url_for('admin_lecturer_reset_password', lecturer_id=lecturer.id) }}"
+        style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;"
+        onsubmit="return confirm('Update this lecturer\'s login password?');">
+    <div class="field" style="margin-bottom:0; min-width:220px;">
+      <label for="new_password">Set a new password</label>
+      <input type="text" id="new_password" name="new_password" placeholder="Leave blank to reset to password123">
+    </div>
+    <button class="btn secondary" type="submit">Update password</button>
+  </form>
+  <p class="subtext" style="margin-top:8px;">Type a specific password to set it directly, or leave the field blank
+    to reset to the default (<code>password123</code>).</p>
+</div>
+
+<div class="panel">
+  <h3>Assigned courses</h3>
+  <table>
+    <thead><tr><th>Course</th><th>Enrolled</th><th></th></tr></thead>
+    <tbody>
+      {% for c in assigned_courses %}
+      <tr>
+        <td>{{ c.code }}<div class="subtext">{{ c.name }}</div></td>
+        <td>{{ c.enrollments|length }} students</td>
+        <td>
+          <form method="post" action="{{ url_for('admin_lecturer_unassign_course', lecturer_id=lecturer.id, course_id=c.id) }}"
+                onsubmit="return confirm('Unassign {{ lecturer.full_name }} from {{ c.code }}? The course will have no lecturer until reassigned.');">
+            <button class="btn secondary" type="submit" style="font-size:.76rem; padding:4px 10px;">Unassign</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="subtext">No courses assigned yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post" action="{{ url_for('admin_lecturer_assign_course', lecturer_id=lecturer.id) }}" style="margin-top:16px; display:flex; gap:10px; align-items:center;">
+    <select name="course_id" style="flex:1; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;" {{ 'disabled' if not available_courses }}>
+      {% for c in available_courses %}
+      <option value="{{ c.id }}">{{ c.code }} — {{ c.name }}{% if c.lecturer %} (currently: {{ c.lecturer.full_name }}){% endif %}</option>
+      {% else %}
+      <option value="">No other courses in this department</option>
+      {% endfor %}
+    </select>
+    <button class="btn secondary" type="submit" {{ 'disabled' if not available_courses }}>Assign course</button>
+  </form>
+  <p class="subtext" style="margin-top:8px;">Assigning a course already taught by someone else reassigns it — the
+    previous lecturer loses access to that course's roster, attendance, and assessments.</p>
+</div>
+{% endblock %}

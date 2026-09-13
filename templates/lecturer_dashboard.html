@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_risk_table.html" import risk_table %}
+{% from "_notif_list.html" import notif_list %}
+{% from "_charts.html" import donut, line %}
+{% block title %}Lecturer Dashboard{% endblock %}
+{% block content %}
+<div class="eyebrow">Lecturer</div>
+<div class="page-title">
+  <h1>{{ current_user.full_name }}'s courses</h1>
+</div>
+
+<div class="stat-row">
+  <div class="stat high"><div class="num">{{ rows|selectattr('risk')|selectattr('risk.risk_band','equalto','High')|list|length }}</div><div class="label">High risk students</div></div>
+  <div class="stat medium"><div class="num">{{ rows|selectattr('risk')|selectattr('risk.risk_band','equalto','Medium')|list|length }}</div><div class="label">Medium risk students</div></div>
+  <div class="stat"><div class="num">{{ courses|length }}</div><div class="label">Courses taught</div></div>
+</div>
+
+<div class="chart-row">
+  {{ donut('lect-risk-donut', 'Risk distribution', ['Low','Medium','High'], [band_counts.Low, band_counts.Medium, band_counts.High], ['#476B4C','#B9821F','#A2402F']) }}
+  {{ line('lect-attendance-line', 'Average attendance by week', att_labels, att_values, 'Attendance %', '#A9793C') }}
+  {{ line('lect-score-line', 'Average assessment score by item', score_labels, score_values, 'Score %', '#1E2B45') }}
+</div>
+
+<div class="panel">
+  <h3>Your courses</h3>
+  <table>
+    <thead><tr><th>Course</th><th>Enrolled</th><th></th></tr></thead>
+    <tbody>
+      {% for c in courses %}
+      <tr>
+        <td>{{ c.code }}<div class="subtext">{{ c.name }}</div></td>
+        <td>{{ c.enrollments|length }} students</td>
+        <td class="btn-row">
+          <a class="btn secondary" href="{{ url_for('lecturer_attendance', course_id=c.id) }}">Attendance</a>
+          <a class="btn secondary" href="{{ url_for('lecturer_assessments', course_id=c.id) }}">Assessments</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="subtext">No courses assigned yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h3>Enrolled students, ranked by risk</h3>
+  {{ risk_table(rows, show_ml=True) }}
+</div>
+
+<div class="panel">
+  <h3>Recent alerts to you</h3>
+  {{ notif_list(notifications) }}
+</div>
+{% endblock %}

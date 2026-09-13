@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Course Management{% endblock %}
+{% block content %}
+<div class="eyebrow">Administrator</div>
+<div class="page-title">
+  <h1>Courses</h1>
+  <a class="btn" href="{{ url_for('admin_course_new') }}">+ New course</a>
+</div>
+
+<div class="panel">
+  <form method="get" style="display:flex; gap:10px; align-items:flex-end;">
+    <div class="field" style="min-width:220px; margin-bottom:0;">
+      <label for="department_id">Department</label>
+      <select id="department_id" name="department_id" style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        <option value="">All departments</option>
+        {% for d in departments %}
+        <option value="{{ d.id }}" {{ 'selected' if dept_id==d.id }}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="btn secondary" type="submit">Filter</button>
+  </form>
+</div>
+
+<div class="panel">
+  <table>
+    <thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Lecturer</th><th>Enrolled</th><th></th></tr></thead>
+    <tbody>
+      {% for c in courses %}
+      <tr>
+        <td>{{ c.code }}</td>
+        <td>{{ c.name }}</td>
+        <td>{{ c.department.name }}</td>
+        <td>{{ c.lecturer.full_name if c.lecturer else '— unassigned —' }}</td>
+        <td>{{ c.enrollments|length }}</td>
+        <td><a class="btn secondary" href="{{ url_for('admin_course_edit', course_id=c.id) }}">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="subtext">No courses yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_risk_table.html" import risk_table %}
+{% from "_notif_list.html" import notif_list %}
+{% from "_charts.html" import donut, multibar %}
+{% block title %}Head of Department Dashboard{% endblock %}
+{% block content %}
+<div class="eyebrow">Head of Department</div>
+<div class="page-title">
+  <h1>{{ dept.name if dept else 'Department' }} — risk overview</h1>
+</div>
+
+<div class="stat-row">
+  <div class="stat high"><div class="num">{{ high }}</div><div class="label">High risk</div></div>
+  <div class="stat medium"><div class="num">{{ medium }}</div><div class="label">Medium risk</div></div>
+  <div class="stat low"><div class="num">{{ low }}</div><div class="label">Low risk</div></div>
+  <div class="stat"><div class="num">{{ courses|length }}</div><div class="label">Courses in department</div></div>
+</div>
+
+<div class="chart-row">
+  {{ donut('hod-risk-donut', 'Department risk distribution', ['Low','Medium','High'], [low, medium, high], ['#476B4C','#B9821F','#A2402F']) }}
+  {{ multibar('hod-lecturer-bar', 'High/Medium risk by lecturer', lecturer_labels,
+      [{'label':'High','data':lecturer_high,'color':'#A2402F'}, {'label':'Medium','data':lecturer_medium,'color':'#B9821F'}]) }}
+</div>
+
+<div class="panel">
+  <h3>All students across the department, ranked by risk</h3>
+  {{ risk_table(rows, show_ml=True) }}
+</div>
+
+<div class="panel">
+  <h3>Recent alerts to you</h3>
+  {{ notif_list(notifications) }}
+</div>
+{% endblock %}

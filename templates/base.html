@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Student Risk & Early Intervention{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">Ledger<br>Early&nbsp;Alert
+      <small>Student risk &amp; intervention register</small>
+    </div>
+    <nav>
+      {% if current_user.is_authenticated %}
+        {% set home = {'admin':'admin_dashboard','lecturer':'lecturer_dashboard','hod':'hod_dashboard','counsellor':'counsellor_dashboard','student':'student_dashboard','parent':'parent_dashboard'}[current_user.role] %}
+        <a class="nav-item {{ 'active' if request.endpoint==home }}" href="{{ url_for(home) }}">Dashboard</a>
+        {% if current_user.role == 'admin' %}
+        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_department') }}" href="{{ url_for('admin_departments') }}">Departments</a>
+        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_course') }}" href="{{ url_for('admin_courses_list') }}">Courses</a>
+        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_student') }}" href="{{ url_for('admin_students_list') }}">Students</a>
+        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_lecturer') }}" href="{{ url_for('admin_lecturers_list') }}">Lecturers</a>
+        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_model') }}" href="{{ url_for('admin_model') }}">Predictive model</a>
+        {% endif %}
+        {% set reports_route = {'admin':'admin_reports','hod':'hod_reports','lecturer':'lecturer_reports','counsellor':'counsellor_reports'}.get(current_user.role) %}
+        {% if reports_route %}
+        <a class="nav-item {{ 'active' if request.endpoint==reports_route }}" href="{{ url_for(reports_route) }}">Reports</a>
+        {% endif %}
+        <a class="nav-item {{ 'active' if request.endpoint=='all_notifications' }}" href="{{ url_for('all_notifications') }}">
+          Notifications
+          {% if unread_count() %}<span class="nav-badge">{{ unread_count() }}</span>{% endif %}
+        </a>
+      {% endif %}
+    </nav>
+    {% if current_user.is_authenticated %}
+    <div class="sidebar-foot">
+      Signed in as<br><strong>{{ current_user.full_name }}</strong><br>
+      <span style="text-transform:capitalize">{{ current_user.role }}</span>
+      <form method="post" action="{{ url_for('logout') }}" style="display:none" id="logout-form"></form>
+      <a href="{{ url_for('logout') }}">Sign out</a>
+    </div>
+    {% endif %}
+  </aside>
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/charts-init.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

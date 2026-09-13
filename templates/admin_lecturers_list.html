@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Lecturer Management{% endblock %}
+{% block content %}
+<div class="eyebrow">Administrator</div>
+<div class="page-title">
+  <h1>Lecturer management</h1>
+  <a class="btn" href="{{ url_for('admin_lecturer_new') }}">+ Register lecturer</a>
+</div>
+
+<div class="panel">
+  <form method="get" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+    <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+      <label for="q">Search name</label>
+      <input type="text" id="q" name="q" value="{{ q }}">
+    </div>
+    <div class="field" style="min-width:180px; margin-bottom:0;">
+      <label for="department_id">Department</label>
+      <select id="department_id" name="department_id" style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        <option value="">All departments</option>
+        {% for d in departments %}
+        <option value="{{ d.id }}" {{ 'selected' if dept_id==d.id }}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <label style="display:flex; align-items:center; gap:6px; font-size:.86rem; color:var(--ink-soft); padding-bottom:9px;">
+      <input type="checkbox" name="show_inactive" value="1" {{ 'checked' if show_inactive }}> Show deactivated
+    </label>
+    <button class="btn secondary" type="submit">Filter</button>
+  </form>
+</div>
+
+<div class="panel">
+  <table>
+    <thead>
+      <tr><th>Lecturer</th><th>Department</th><th>Courses</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a href="{{ url_for('admin_lecturer_profile', lecturer_id=r.lecturer.id) }}">{{ r.lecturer.full_name }}</a>
+          <div class="subtext">{{ r.lecturer.username }}</div></td>
+        <td>{{ r.lecturer.department.name if r.lecturer.department else '—' }}</td>
+        <td>{{ r.course_count }}</td>
+        <td>{% if r.lecturer.active %}Active{% else %}<span class="subtext">Deactivated</span>{% endif %}</td>
+        <td><a class="btn secondary" href="{{ url_for('admin_lecturer_profile', lecturer_id=r.lecturer.id) }}">Open</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="subtext">No lecturers match these filters.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

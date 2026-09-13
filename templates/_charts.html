@@ -1,0 +1,39 @@
+{% macro donut(canvas_id, title, labels, values, colors) %}
+<div class="chart-card">
+  <h3>{{ title }}</h3>
+  <div class="canvas-wrap">
+    <canvas id="{{ canvas_id }}" data-kind="donut"
+            data-labels='{{ labels|tojson }}' data-values='{{ values|tojson }}' data-colors='{{ colors|tojson }}'></canvas>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro bar(canvas_id, title, labels, values, label, color) %}
+<div class="chart-card">
+  <h3>{{ title }}</h3>
+  <div class="canvas-wrap">
+    <canvas id="{{ canvas_id }}" data-kind="bar" data-label="{{ label }}" data-color="{{ color }}"
+            data-labels='{{ labels|tojson }}' data-values='{{ values|tojson }}'></canvas>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro multibar(canvas_id, title, labels, series) %}
+<div class="chart-card">
+  <h3>{{ title }}</h3>
+  <div class="canvas-wrap">
+    <canvas id="{{ canvas_id }}" data-kind="multibar"
+            data-labels='{{ labels|tojson }}' data-series='{{ series|tojson }}'></canvas>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro line(canvas_id, title, labels, values, label, color, small=False, max=100) %}
+<div class="chart-card {{ 'small' if small }}">
+  <h3>{{ title }}</h3>
+  <div class="canvas-wrap">
+    <canvas id="{{ canvas_id }}" data-kind="line" data-label="{{ label }}" data-color="{{ color }}" data-max="{{ max }}"
+            data-labels='{{ labels|tojson }}' data-values='{{ values|tojson }}'></canvas>
+  </div>
+</div>
+{% endmacro %}

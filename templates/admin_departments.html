@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Department Management{% endblock %}
+{% block content %}
+<div class="eyebrow">Administrator</div>
+<div class="page-title"><h1>Departments</h1></div>
+
+<div class="panel" style="max-width:480px;">
+  <h3>Add a department</h3>
+  <form method="post" style="display:flex; gap:10px; align-items:flex-end;">
+    <div class="field" style="flex:1; margin-bottom:0;">
+      <label for="name">Department name</label>
+      <input type="text" id="name" name="name" required placeholder="e.g. School of Nursing">
+    </div>
+    <button class="btn" type="submit">Add</button>
+  </form>
+</div>
+
+<div class="panel">
+  <table>
+    <thead><tr><th>Department</th><th>Courses</th><th>Students</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.department.name }}</td>
+        <td>{{ r.course_count }}</td>
+        <td>{{ r.student_count }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="subtext">No departments yet — add one above to get started.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

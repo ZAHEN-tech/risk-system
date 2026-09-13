@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Early Alert</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <h1>Early Alert</h1>
+    <p class="sub">Student risk &amp; intervention register</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="post">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autofocus required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button class="btn" type="submit" style="width:100%">Sign in</button>
+    </form>
+
+    <div class="demo-accounts">
+      <p>Demo accounts (password: password123)</p>
+      {% for username, label in demo_accounts %}
+        <span class="demo-chip">{{ username }} — {{ label }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+</body>
+</html>

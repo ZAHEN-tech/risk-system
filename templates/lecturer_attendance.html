@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Attendance — {{ course.code }}{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('lecturer_dashboard') }}">← Your courses</a></div>
+<div class="page-title">
+  <h1>Attendance — {{ course.code }} {{ course.name }}</h1>
+</div>
+
+<div class="panel">
+  <form method="get" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:6px;">
+    <div class="field" style="margin-bottom:0;">
+      <label for="week">Week</label>
+      <input type="number" id="week" name="week" min="1" value="{{ week }}" style="width:100px;">
+    </div>
+    <button class="btn secondary" type="submit">Load</button>
+    {% if recorded_weeks %}
+    <span class="subtext">Weeks already recorded: {{ recorded_weeks|join(', ') }}</span>
+    {% endif %}
+  </form>
+</div>
+
+<div class="panel">
+  <h3>Week {{ week }} register</h3>
+  <p class="subtext">Untick any student who was absent, then save. This updates their risk score and may
+    trigger alerts immediately.</p>
+  <form method="post">
+    <input type="hidden" name="week" value="{{ week }}">
+    <table>
+      <thead><tr><th>Student</th><th>Present</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.student.user.full_name }}<div class="subtext">{{ r.student.student_number }}</div></td>
+          <td><input type="checkbox" name="present_{{ r.enrollment.id }}" {{ 'checked' if r.present }} style="width:18px; height:18px;"></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="2" class="subtext">No students enrolled in this course yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if rows %}
+    <button class="btn" type="submit" style="margin-top:16px;">Save week {{ week }} attendance</button>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_notif_list.html" import notif_list %}
+{% block title %}Parent / Guardian Dashboard{% endblock %}
+{% block content %}
+<div class="eyebrow">Parent / Guardian</div>
+<div class="page-title">
+  <h1>Your child's academic standing</h1>
+</div>
+<p class="subtext">You only see a summary here — course-level detail and support planning stays with the
+  institution's academic and counselling staff, who will contact you directly if needed.</p>
+
+{% for entry in data %}
+<div class="panel">
+  <h3>{{ entry.student.user.full_name }} <span class="subtext">· {{ entry.student.department.name }}</span></h3>
+  <table>
+    <thead><tr><th>Course</th><th>Standing</th></tr></thead>
+    <tbody>
+      {% for r in entry.rows %}
+      <tr>
+        <td>{{ r.course.code }} — {{ r.course.name }}</td>
+        <td>{% if r.risk %}<span class="badge {{ r.risk.risk_band|band_class }}">{{ r.risk.risk_band }}</span>{% else %}<span class="badge risk-unknown">Not scored</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="panel"><p class="subtext">No linked students found on this account.</p></div>
+{% endfor %}
+
+<div class="panel">
+  <h3>Notifications</h3>
+  {{ notif_list(notifications) }}
+</div>
+{% endblock %}

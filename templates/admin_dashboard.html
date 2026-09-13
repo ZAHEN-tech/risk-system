@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "_charts.html" import donut, multibar %}
+{% block title %}System Administration{% endblock %}
+{% block content %}
+<div class="eyebrow">Administrator</div>
+<div class="page-title">
+  <h1>System overview</h1>
+</div>
+
+<div class="stat-row">
+  <div class="stat"><div class="num">{{ total_students }}</div><div class="label">Students</div></div>
+  <div class="stat"><div class="num">{{ total_courses }}</div><div class="label">Courses</div></div>
+  <div class="stat high"><div class="num">{{ high }}</div><div class="label">High risk enrollments</div></div>
+  <div class="stat medium"><div class="num">{{ medium }}</div><div class="label">Medium risk enrollments</div></div>
+  <div class="stat low"><div class="num">{{ low }}</div><div class="label">Low risk enrollments</div></div>
+  <div class="stat"><div class="num">{{ notif_count }}</div><div class="label">Notifications sent</div></div>
+</div>
+
+<div class="chart-row">
+  {{ donut('admin-risk-donut', 'Risk distribution, institution-wide', ['Low','Medium','High'], [low, medium, high], ['#476B4C','#B9821F','#A2402F']) }}
+  {{ multibar('admin-dept-bar', 'High/Medium risk by department', dept_labels,
+      [{'label':'High','data':dept_high,'color':'#A2402F'}, {'label':'Medium','data':dept_medium,'color':'#B9821F'}]) }}
+</div>
+
+<div class="panel">
+  <h3>Departments &amp; courses</h3>
+  <p class="subtext">Set these up first — courses need a department, and students/lecturers need courses to
+    be assigned to.</p>
+  <div class="btn-row">
+    <a class="btn secondary" href="{{ url_for('admin_departments') }}">Manage departments →</a>
+    <a class="btn secondary" href="{{ url_for('admin_courses_list') }}">Manage courses →</a>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Student records</h3>
+  <p class="subtext">Register new students, edit details, manage course enrollments, reset passwords,
+    or deactivate accounts.</p>
+  <a class="btn secondary" href="{{ url_for('admin_students_list') }}">Manage students →</a>
+</div>
+
+<div class="panel">
+  <h3>Lecturer records</h3>
+  <p class="subtext">Register new lecturers, edit details, assign or reassign courses, reset passwords,
+    or deactivate accounts.</p>
+  <a class="btn secondary" href="{{ url_for('admin_lecturers_list') }}">Manage lecturers →</a>
+</div>
+
+<div class="panel">
+  <h3>Data pipeline</h3>
+  <p class="subtext">Attendance, coursework and assessment data normally flow in from the student information
+    system and LMS on a schedule (e.g. nightly). In this prototype you can seed a synthetic dataset and trigger
+    the risk engine manually.</p>
+  <div class="btn-row">
+    <form method="post" action="{{ url_for('admin_seed') }}"><button class="btn secondary" type="submit">Seed demo dataset</button></form>
+    <form method="post" action="{{ url_for('admin_recompute') }}"><button class="btn" type="submit">Recompute risk & send alerts</button></form>
+    <form method="post" action="{{ url_for('admin_reset') }}" onsubmit="return confirm('This wipes all data. Continue?');"><button class="btn secondary" type="submit">Reset database</button></form>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>How risk is scored</h3>
+  <p class="subtext">risk_score = 0.35 × (100 − attendance%) + 0.35 × (100 − assessment avg) +
+    0.20 × (100 − submission rate) + 0.10 × trend penalty.<br>
+    Bands: ≥60 High · 30–59 Medium · &lt;30 Low. Weights are configurable in <code>risk_engine.py</code>
+    and should be recalibrated against an institution's own historical outcome data over time.</p>
+  <p class="subtext">A logistic-regression model trained on historical outcomes runs alongside this rule
+    in shadow mode, scoring every enrollment for comparison without yet driving alerts on its own.</p>
+  <a class="btn secondary" href="{{ url_for('admin_model') }}">View predictive model &amp; metrics →</a>
+</div>
+{% endblock %}

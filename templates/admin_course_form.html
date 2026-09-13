@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ 'New Course' if not course else 'Edit Course' }}{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('admin_courses_list') }}">← Courses</a></div>
+<div class="page-title"><h1>{{ 'New course' if not course else 'Edit ' + course.code }}</h1></div>
+
+<div class="panel" style="max-width:480px;">
+  <form method="post">
+    <div class="field">
+      <label for="code">Course code</label>
+      <input type="text" id="code" name="code" required placeholder="e.g. CS101"
+             value="{{ form.get('code','') if not course else course.code }}">
+    </div>
+    <div class="field">
+      <label for="name">Course name</label>
+      <input type="text" id="name" name="name" required placeholder="e.g. Intro to Programming"
+             value="{{ form.get('name','') if not course else course.name }}">
+    </div>
+    <div class="field">
+      <label for="department_id">Department</label>
+      <select id="department_id" name="department_id" required style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        {% for d in departments %}
+        {% set current_dept = form.get('department_id','')|int if not course else course.department_id %}
+        <option value="{{ d.id }}" {{ 'selected' if current_dept==d.id }}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="lecturer_id">Lecturer</label>
+      <select id="lecturer_id" name="lecturer_id" style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        <option value="">— Unassigned —</option>
+        {% for l in lecturers %}
+        {% set current_lect = form.get('lecturer_id','')|int if not course else (course.lecturer_id or 0) %}
+        <option value="{{ l.id }}" {{ 'selected' if current_lect==l.id }}>{{ l.full_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="btn-row" style="margin-top:18px;">
+      <button class="btn" type="submit">{{ 'Create course' if not course else 'Save changes' }}</button>
+      <a class="btn secondary" href="{{ url_for('admin_courses_list') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

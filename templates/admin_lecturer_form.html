@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Register Lecturer' if mode=='new' else 'Edit Lecturer' }}{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('admin_lecturers_list') }}">← Lecturer management</a></div>
+<div class="page-title">
+  <h1>{{ 'Register new lecturer' if mode=='new' else 'Edit ' + lecturer.full_name }}</h1>
+</div>
+
+<div class="panel" style="max-width:480px;">
+  <form method="post">
+    <div class="field">
+      <label for="full_name">Full name</label>
+      <input type="text" id="full_name" name="full_name" required
+             value="{{ form.get('full_name','') if mode=='new' else lecturer.full_name }}">
+    </div>
+
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="text" id="email" name="email"
+             value="{{ form.get('email','') if mode=='new' else (lecturer.email or '') }}">
+    </div>
+
+    <div class="field">
+      <label for="department_id">Department</label>
+      <select id="department_id" name="department_id" required style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        {% for d in departments %}
+        {% set current_dept = form.get('department_id','')|int if mode=='new' else lecturer.department_id %}
+        <option value="{{ d.id }}" {{ 'selected' if current_dept==d.id }}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% if mode == 'new' %}
+    <div class="field">
+      <label for="password">Initial password</label>
+      <input type="text" id="password" name="password" placeholder="password123" value="{{ form.get('password','') }}">
+    </div>
+    {% endif %}
+
+    <div class="btn-row" style="margin-top:18px;">
+      <button class="btn" type="submit">{{ 'Register lecturer' if mode=='new' else 'Save changes' }}</button>
+      <a class="btn secondary" href="{{ url_for('admin_lecturers_list') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

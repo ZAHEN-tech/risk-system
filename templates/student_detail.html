@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_risk_table.html" import risk_table %}
+{% block title %}{{ student.user.full_name }} — Case file{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('counsellor_dashboard') }}">← Caseload</a></div>
+<div class="page-title">
+  <h1>{{ student.user.full_name }}</h1>
+</div>
+<p class="subtext">{{ student.student_number }} · {{ student.department.name }} · Year {{ student.year_of_study }}
+  · Counsellor: {{ current_user.full_name }}</p>
+
+<div class="panel">
+  <h3>Risk by course</h3>
+  {{ risk_table(rows, show_student=False, show_ml=True) }}
+</div>
+
+<div class="panel">
+  <h3>What's driving the predictive model's score</h3>
+  {% for r in rows %}
+    {% set exp = explanations.get(r.enrollment.id) %}
+    {% if exp %}
+    <div style="margin-bottom:16px;">
+      <strong>{{ r.course.code }} — {{ r.course.name }}</strong>
+      {% for item in exp %}
+      <div class="breakdown-row">
+        <span>{{ item.feature }}</span>
+        <span style="display:flex; align-items:center; gap:8px; width:220px;">
+          <span class="meter" style="width:140px;">
+            <span style="width:{{ (item.contribution|abs / 1.5 * 100)|round(0)|int if (item.contribution|abs / 1.5 * 100) < 100 else 100 }}%; background:{{ 'var(--high)' if item.contribution > 0 else 'var(--low)' }};"></span>
+          </span>
+          <span class="subtext">{{ 'raises' if item.contribution > 0 else 'lowers' }} risk</span>
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% if editable %}
+<div class="panel">
+  <h3>Log an intervention</h3>
+  <form method="post">
+    <div class="field">
+      <label for="note">Notes</label>
+      <textarea id="note" name="note" placeholder="What was discussed, observed, or agreed with the student..." required></textarea>
+    </div>
+    <div class="field">
+      <label for="action_taken">Action taken</label>
+      <input type="text" id="action_taken" name="action_taken" placeholder="e.g. Referred to academic support workshop">
+    </div>
+    <button class="btn" type="submit">Save note</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h3>Intervention history</h3>
+  {% for note in notes %}
+  <div class="note-card">
+    <div class="note-meta">{{ note.author.full_name }} · {{ note.created_at.strftime('%d %b %Y, %H:%M') }}
+      {% if note.action_taken %} · Action: {{ note.action_taken }}{% endif %}</div>
+    <div>{{ note.note }}</div>
+  </div>
+  {% else %}
+  <p class="subtext">No interventions logged yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

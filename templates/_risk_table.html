@@ -1,0 +1,53 @@
+{% macro risk_table(rows, show_student=True, show_course=True, detail_url_endpoint=None, show_ml=False) %}
+<table>
+  <thead>
+    <tr>
+      {% if show_student %}<th>Student</th>{% endif %}
+      {% if show_course %}<th>Course</th>{% endif %}
+      <th>Attendance</th>
+      <th>Assessment avg</th>
+      <th>Submission rate</th>
+      <th>Risk (rule-based)</th>
+      {% if show_ml %}<th>Risk (ML model)</th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      {% if show_student %}
+      <td>
+        {% if detail_url_endpoint %}
+          <a href="{{ url_for(detail_url_endpoint, student_id=r.student.id) }}">{{ r.student.user.full_name }}</a>
+        {% else %}
+          {{ r.student.user.full_name }}
+        {% endif %}
+        <div class="subtext">{{ r.student.student_number }}</div>
+      </td>
+      {% endif %}
+      {% if show_course %}<td>{{ r.course.code }}<div class="subtext">{{ r.course.name }}</div></td>{% endif %}
+      <td>{{ r.risk.attendance_pct if r.risk else '—' }}%</td>
+      <td>{{ r.risk.assessment_avg if r.risk else '—' }}%</td>
+      <td>{{ r.risk.submission_rate if r.risk else '—' }}%</td>
+      <td>
+        {% if r.risk %}
+          <span class="badge {{ r.risk.risk_band|band_class }}">{{ r.risk.risk_band }} · {{ r.risk.risk_score }}</span>
+        {% else %}
+          <span class="badge risk-unknown">Not scored</span>
+        {% endif %}
+      </td>
+      {% if show_ml %}
+      <td>
+        {% if r.risk and r.risk.ml_band %}
+          <span class="badge {{ r.risk.ml_band|band_class }}">{{ r.risk.ml_band }} · {{ r.risk.ml_probability }}</span>
+        {% else %}
+          <span class="badge risk-unknown">Not scored</span>
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+    {% else %}
+    <tr><td colspan="{{ 6 if show_ml else 5 }}" class="subtext">No records to show.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}

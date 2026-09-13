@@ -1,0 +1,20 @@
+{% macro notif_list(notifications) %}
+<ul class="notif-list">
+  {% for n in notifications %}
+  <li class="notif-item {{ 'unread' if not n.read }}">
+    <span class="dot {{ n.severity }}"></span>
+    <div>
+      <div class="msg">{{ n.message }}</div>
+      <div class="meta">{{ n.created_at.strftime('%d %b %Y, %H:%M') }}</div>
+    </div>
+    {% if not n.read %}
+    <form method="post" action="{{ url_for('mark_notification_read', notif_id=n.id) }}">
+      <button type="submit">Mark read</button>
+    </form>
+    {% endif %}
+  </li>
+  {% else %}
+  <li class="subtext">No notifications yet.</li>
+  {% endfor %}
+</ul>
+{% endmacro %}

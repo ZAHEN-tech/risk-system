@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Register Student' if mode=='new' else 'Edit Student' }}{% endblock %}
+{% block content %}
+<div class="eyebrow">
+  <a href="{{ url_for('admin_students_list') }}">← Student management</a>
+</div>
+<div class="page-title">
+  <h1>{{ 'Register new student' if mode=='new' else 'Edit ' + student.user.full_name }}</h1>
+</div>
+
+<div class="panel" style="max-width:560px;">
+  <form method="post">
+    <div class="field">
+      <label for="full_name">Full name</label>
+      <input type="text" id="full_name" name="full_name" required
+             value="{{ form.get('full_name','') if mode=='new' else student.user.full_name }}">
+    </div>
+
+    {% if mode == 'new' %}
+    <div class="field">
+      <label for="student_number">Student ID</label>
+      <input type="text" id="student_number" name="student_number" required value="{{ form.get('student_number','') }}">
+    </div>
+    {% else %}
+    <div class="field">
+      <label>Student ID</label>
+      <input type="text" value="{{ student.student_number }}" disabled style="background:#F1EEE3;">
+    </div>
+    {% endif %}
+
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="text" id="email" name="email"
+             value="{{ form.get('email','') if mode=='new' else (student.user.email or '') }}">
+    </div>
+
+    <div class="field">
+      <label for="department_id">Department</label>
+      <select id="department_id" name="department_id" required style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        {% for d in departments %}
+        {% set current_dept = form.get('department_id','')|int if mode=='new' else student.department_id %}
+        <option value="{{ d.id }}" {{ 'selected' if current_dept==d.id }}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="year_of_study">Year of study</label>
+      <select id="year_of_study" name="year_of_study" style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        {% set current_year = form.get('year_of_study','1')|int if mode=='new' else student.year_of_study %}
+        {% for y in [1,2,3,4] %}
+        <option value="{{ y }}" {{ 'selected' if current_year==y }}>Year {{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="counsellor_id">Assigned counsellor</label>
+      <select id="counsellor_id" name="counsellor_id" style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        <option value="">— None —</option>
+        {% for c in counsellors %}
+        {% set current_counsellor = form.get('counsellor_id','')|int if mode=='new' else (student.counsellor_id or 0) %}
+        <option value="{{ c.id }}" {{ 'selected' if current_counsellor==c.id }}>{{ c.full_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% if mode == 'new' %}
+    <div class="field">
+      <label for="password">Initial password</label>
+      <input type="text" id="password" name="password" placeholder="password123" value="{{ form.get('password','') }}">
+    </div>
+
+    <div class="panel" style="background:var(--paper); margin:18px 0;">
+      <h3 style="font-size:.9rem;">Parent / guardian (optional)</h3>
+      <div class="field">
+        <label for="parent_name">Parent full name</label>
+        <input type="text" id="parent_name" name="parent_name" placeholder="Leave blank if not linking a parent" value="{{ form.get('parent_name','') }}">
+      </div>
+      <div class="field">
+        <label for="parent_email">Parent email</label>
+        <input type="text" id="parent_email" name="parent_email" value="{{ form.get('parent_email','') }}">
+      </div>
+      <label style="display:flex; align-items:center; gap:6px; font-size:.86rem; color:var(--ink-soft);">
+        <input type="checkbox" name="parent_consent" {{ 'checked' if form.get('parent_consent')=='on' or not form }}>
+        Parent has consented to be notified if this student is flagged High risk
+      </label>
+    </div>
+
+    <div class="panel" style="background:var(--paper); margin:18px 0;">
+      <h3 style="font-size:.9rem;">Enroll into courses now (optional)</h3>
+      <p class="subtext" style="margin-bottom:10px;">Ticking a course enrolls the student immediately and adds
+        them to that course's lecturer's attendance and assessment lists.</p>
+      {% for c in all_courses %}
+      <label style="display:flex; align-items:center; gap:8px; font-size:.86rem; padding:4px 0;">
+        <input type="checkbox" name="course_ids" value="{{ c.id }}">
+        {{ c.code }} — {{ c.name }}
+        <span class="subtext">({{ c.department.name }}{% if c.lecturer %} · {{ c.lecturer.full_name }}{% else %} · no lecturer assigned{% endif %})</span>
+      </label>
+      {% else %}
+      <p class="subtext">No courses exist yet.</p>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="field">
+      <label style="display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" name="parent_consent" {{ 'checked' if student.parent_consent }}>
+        Parent has consented to be notified if this student is flagged High risk
+      </label>
+      {% if not student.parent %}<p class="subtext">No parent account linked to this student.</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="btn-row" style="margin-top:18px;">
+      <button class="btn" type="submit">{{ 'Register student' if mode=='new' else 'Save changes' }}</button>
+      <a class="btn secondary" href="{{ url_for('admin_students_list') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_notif_list.html" import notif_list %}
+{% from "_charts.html" import donut %}
+{% block title %}Counsellor Dashboard{% endblock %}
+{% block content %}
+<div class="eyebrow">Student Counsellor</div>
+<div class="page-title">
+  <h1>Caseload requiring attention</h1>
+</div>
+
+<div class="stat-row">
+  <div class="stat high"><div class="num">{{ rows|selectattr('risk.risk_band','equalto','High')|list|length }}</div><div class="label">High risk</div></div>
+  <div class="stat medium"><div class="num">{{ rows|selectattr('risk.risk_band','equalto','Medium')|list|length }}</div><div class="label">Medium risk</div></div>
+  <div class="stat"><div class="num">{{ rows|length }}</div><div class="label">Total on caseload</div></div>
+</div>
+
+{% if rows %}
+<div class="chart-row">
+  {{ donut('counsellor-donut', 'Caseload composition', ['Medium','High'], [band_counts.Medium, band_counts.High], ['#B9821F','#A2402F']) }}
+</div>
+{% endif %}
+
+<div class="panel">
+  <h3>Students flagged for support</h3>
+  <table>
+    <thead>
+      <tr><th>Student</th><th>Worst course risk</th><th>Flagged in</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.student.user.full_name }}<div class="subtext">{{ r.student.student_number }} · Year {{ r.student.year_of_study }}</div></td>
+        <td><span class="badge {{ r.risk.risk_band|band_class }}">{{ r.risk.risk_band }} · {{ r.risk.risk_score }}</span></td>
+        <td>{{ r.n_flagged_courses }} course(s)</td>
+        <td><a class="btn secondary" href="{{ url_for('counsellor_student_detail', student_id=r.student.id) }}">Open case</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="subtext">No students currently need attention. Nicely done.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h3>Recent alerts to you</h3>
+  {{ notif_list(notifications) }}
+</div>
+{% endblock %}
