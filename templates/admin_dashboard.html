@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% from "_charts.html" import donut, multibar %}
+{% from "_ui.html" import icon %}
 {% block title %}System Administration{% endblock %}
 {% block content %}
-<div class="eyebrow">Administrator</div>
 <div class="page-title">
-  <h1>System overview</h1>
+  <div><h1>Good {{ greeting }}{% if current_user.full_name != 'System Administrator' %}, {{ current_user.first_name }}{% endif %}</h1>
+  <p class="subtext" style="margin:0;">Here is how students across the institution are doing.</p></div>
 </div>
 
 <div class="stat-row">
@@ -22,28 +23,20 @@
       [{'label':'High','data':dept_high,'color':'#A2402F'}, {'label':'Medium','data':dept_medium,'color':'#B9821F'}]) }}
 </div>
 
-<div class="panel">
-  <h3>Departments &amp; courses</h3>
-  <p class="subtext">Set these up first — courses need a department, and students/lecturers need courses to
-    be assigned to.</p>
-  <div class="btn-row">
-    <a class="btn secondary" href="{{ url_for('admin_departments') }}">Manage departments →</a>
-    <a class="btn secondary" href="{{ url_for('admin_courses_list') }}">Manage courses →</a>
-  </div>
-</div>
-
-<div class="panel">
-  <h3>Student records</h3>
-  <p class="subtext">Register new students, edit details, manage course enrollments, reset passwords,
-    or deactivate accounts.</p>
-  <a class="btn secondary" href="{{ url_for('admin_students_list') }}">Manage students →</a>
-</div>
-
-<div class="panel">
-  <h3>Lecturer records</h3>
-  <p class="subtext">Register new lecturers, edit details, assign or reassign courses, reset passwords,
-    or deactivate accounts.</p>
-  <a class="btn secondary" href="{{ url_for('admin_lecturers_list') }}">Manage lecturers →</a>
+<h2 class="section-title">Manage records</h2>
+<div class="actions-grid">
+  <a class="action-card" href="{{ url_for('admin_departments') }}"><span class="icon-wrap">{{ icon('department', 20) }}</span>
+    <span><strong>Departments</strong><span class="subtext">Set these up first. Courses and people belong to a department.</span></span></a>
+  <a class="action-card" href="{{ url_for('admin_courses_list') }}"><span class="icon-wrap">{{ icon('course', 20) }}</span>
+    <span><strong>Courses</strong><span class="subtext">Add courses and choose who teaches them.</span></span></a>
+  <a class="action-card" href="{{ url_for('admin_students_list') }}"><span class="icon-wrap">{{ icon('students', 20) }}</span>
+    <span><strong>Students</strong><span class="subtext">Register students, enrol them in courses and link parents.</span></span></a>
+  <a class="action-card" href="{{ url_for('admin_lecturers_list') }}"><span class="icon-wrap">{{ icon('lecturer', 20) }}</span>
+    <span><strong>Lecturers</strong><span class="subtext">Teaching staff and the courses assigned to them.</span></span></a>
+  <a class="action-card" href="{{ url_for('admin_staff_list') }}"><span class="icon-wrap">{{ icon('staff', 20) }}</span>
+    <span><strong>Heads &amp; counsellors</strong><span class="subtext">Heads of Department and Student Services counsellors.</span></span></a>
+  <a class="action-card" href="{{ url_for('admin_reports') }}"><span class="icon-wrap">{{ icon('reports', 20) }}</span>
+    <span><strong>Reports</strong><span class="subtext">Download performance, risk and attendance reports.</span></span></a>
 </div>
 
 <div class="panel">
@@ -66,6 +59,6 @@
     and should be recalibrated against an institution's own historical outcome data over time.</p>
   <p class="subtext">A logistic-regression model trained on historical outcomes runs alongside this rule
     in shadow mode, scoring every enrollment for comparison without yet driving alerts on its own.</p>
-  <a class="btn secondary" href="{{ url_for('admin_model') }}">View predictive model &amp; metrics →</a>
+  <a class="btn secondary" href="{{ url_for('admin_model') }}">View predictive model &amp; metrics</a>
 </div>
 {% endblock %}

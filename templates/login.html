@@ -1,46 +1,73 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{ default_theme }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in — Early Alert</title>
+<title>Sign in · {{ APP_NAME }}</title>
+<script>try { var t = localStorage.getItem('ua-theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
-<div class="login-wrap">
-  <div class="login-card">
-    <h1>Early Alert</h1>
-    <p class="sub">Student risk &amp; intervention register</p>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="flash {{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-
-    <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" autofocus required>
-      </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" required>
-      </div>
-      <button class="btn" type="submit" style="width:100%">Sign in</button>
-    </form>
-
-    {% if demo_accounts %}
-    <div class="demo-accounts">
-      <p>Demo accounts (password: password123)</p>
-      {% for username, label in demo_accounts %}
-        <span class="demo-chip">{{ username }} — {{ label }}</span>
-      {% endfor %}
+<body class="login-page">
+{% from "_ui.html" import icon, logo %}
+<div class="login-split">
+  <section class="login-hero" aria-label="About {{ APP_NAME }}">
+    <div class="login-hero-inner">
+      <div class="login-brand">{{ logo(52, animated=True) }}<span>{{ APP_NAME }}</span></div>
+      <h1>See which students need support while there is still time to help.</h1>
+      <p class="login-lede">{{ APP_NAME }} watches attendance, submissions and marks across every course
+        and alerts the right people as soon as a student starts to fall behind.</p>
+      <ul class="login-points">
+        <li>{{ icon('attendance', 20) }}<span>Risk updates the moment a lecturer saves attendance or marks.</span></li>
+        <li>{{ icon('bell', 20) }}<span>Lecturers, Heads of Department and counsellors are alerted together.</span></li>
+        <li>{{ icon('shield', 20) }}<span>Each person sees only what their role needs. Parents are told only with consent.</span></li>
+      </ul>
     </div>
-    {% endif %}
-  </div>
+  </section>
+
+  <section class="login-form-side">
+    <div class="login-card">
+      <h2>Sign in</h2>
+      <p class="subtext">Use the username and password given to you by your institution.</p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for category, message in messages %}
+          <div class="flash {{ category }}" role="alert">{{ message }}</div>
+        {% endfor %}{% endif %}
+      {% endwith %}
+
+      <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" autocomplete="username" autofocus required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn block" type="submit">Sign in</button>
+      </form>
+
+      <div class="login-help">
+        <p><strong>Forgotten your password?</strong> Contact the Student Services office. An administrator can
+          give you a new temporary password.</p>
+        <p class="subtext">After 5 incorrect attempts your account is locked for 15 minutes.</p>
+      </div>
+
+      <div class="login-theme">
+        <span class="subtext">Theme</span>
+        <div class="theme-picker" role="radiogroup" aria-label="Theme">
+          {% for key, label in themes.items() %}
+          <button type="button" class="theme-swatch swatch-{{ key }}" data-theme-choice="{{ key }}" role="radio" aria-label="{{ label }}" title="{{ label }}"></button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
+<script src="{{ url_for('static', filename='js/ui.js') }}"></script>
 </body>
 </html>

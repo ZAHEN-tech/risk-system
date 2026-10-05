@@ -1,0 +1,34 @@
+{# Small inline line icons (24px grid, stroke = currentColor). Drawn for this app. #}
+{% macro icon(name, size=18) -%}
+<svg class="icon" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{%- if name == 'dashboard' -%}<rect x="3" y="3" width="7.5" height="9" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="5" rx="1.5"/><rect x="13.5" y="11" width="7.5" height="10" rx="1.5"/><rect x="3" y="15" width="7.5" height="6" rx="1.5"/>
+{%- elif name == 'department' -%}<path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/>
+{%- elif name == 'course' -%}<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20"/>
+{%- elif name == 'students' -%}<path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2.5 9 2.5 12 0v-5M22 9v6"/>
+{%- elif name == 'lecturer' -%}<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4M7 9h6M7 12h4"/>
+{%- elif name == 'staff' -%}<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.4 3-5.5 6-5.5s5.4 2.1 6 5.5"/><circle cx="17.5" cy="9" r="2.4"/><path d="M16.5 14.6c2.4.2 4.1 2 4.5 5.4"/>
+{%- elif name == 'model' -%}<path d="M3 20h18"/><path d="M5 16l4-5 4 3 6-8"/><circle cx="19" cy="6" r="1.4"/>
+{%- elif name == 'reports' -%}<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>
+{%- elif name == 'bell' -%}<path d="M6 10a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 16 6 10zM10 20.5a2 2 0 0 0 4 0"/>
+{%- elif name == 'user' -%}<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.4 4.2-6.5 8-6.5s7 2.1 8 6.5"/>
+{%- elif name == 'key' -%}<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/>
+{%- elif name == 'logout' -%}<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>
+{%- elif name == 'palette' -%}<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 2-2 0-1.6-1.6-1.8-1.6-3.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-3.9-4-7-9-7z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>
+{%- elif name == 'menu' -%}<path d="M4 7h16M4 12h16M4 17h16"/>
+{%- elif name == 'attendance' -%}<rect x="3" y="5" width="18" height="16" rx="1.5"/><path d="M3 10h18M8 3v4M16 3v4M8.5 15l2.2 2.2 4.8-4.7"/>
+{%- elif name == 'check' -%}<path d="M5 12.5l4.2 4.2L19 7"/>
+{%- elif name == 'shield' -%}<path d="M12 3l8 3v6c0 4.6-3.3 8-8 9-4.7-1-8-4.4-8-9V6z"/>
+{%- elif name == 'heart' -%}<path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
+
+{# The UniAlert mark: a crest crossed by a rising early-warning signal. #}
+{% macro logo(size=34, animated=False) -%}
+<svg class="logo-mark{{ ' animated' if animated }}" width="{{ size }}" height="{{ size }}" viewBox="0 0 48 48" aria-hidden="true">
+  <path class="logo-crest" d="M24 3.5l17 6v13.2c0 10.4-7.3 18.3-17 21.8C14.3 41 7 33.1 7 22.7V9.5z"/>
+  <path class="logo-signal" d="M10.5 27.5h7l3.2-7.5 4.6 13 3.6-9.5 2.6 4h6"/>
+  <circle class="logo-dot" cx="37.5" cy="27.5" r="2.3"/>
+</svg>
+{%- endmacro %}

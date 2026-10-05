@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% from "_password_field.html" import password_field %}
 {% block title %}{{ 'Add Staff Account' if mode=='new' else 'Edit Staff Account' }}{% endblock %}
 {% block content %}
-<div class="eyebrow"><a href="{{ url_for('admin_staff_list') }}">← Staff accounts</a></div>
+<div class="eyebrow"><a href="{{ url_for('admin_staff_list') }}">← Heads &amp; counsellors</a></div>
 <div class="page-title">
   <h1>{{ 'Add staff account' if mode=='new' else 'Edit ' + staff.full_name }}</h1>
 </div>
@@ -48,11 +49,7 @@
     </div>
 
     {% if mode == 'new' %}
-    <div class="field">
-      <label for="password">Initial password</label>
-      <input type="text" id="password" name="password" minlength="8" placeholder="Leave blank for password123" value="{{ form.get('password','') }}">
-      <p class="subtext" style="margin-top:6px;">At least 8 characters. They will be asked to change it at first sign-in.</p>
-    </div>
+    {{ password_field("password", "Initial password", optional=True, value=form.get("password","")) }}
     {% endif %}
 
     <div class="btn-row" style="margin-top:18px;">

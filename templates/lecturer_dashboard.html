@@ -30,10 +30,10 @@
       <tr>
         <td>{{ c.code }}<div class="subtext">{{ c.name }}</div></td>
         <td>{{ c.enrollments|length }} students</td>
-        <td class="btn-row">
-          <a class="btn secondary" href="{{ url_for('lecturer_attendance', course_id=c.id) }}">Attendance</a>
-          <a class="btn secondary" href="{{ url_for('lecturer_assessments', course_id=c.id) }}">Assessments</a>
-        </td>
+        <td><div class="btn-row" style="justify-content:flex-end;">
+          <a class="btn secondary small" href="{{ url_for('lecturer_attendance', course_id=c.id) }}">Attendance</a>
+          <a class="btn secondary small" href="{{ url_for('lecturer_assessments', course_id=c.id) }}">Assessments</a>
+        </div></td>
       </tr>
       {% else %}
       <tr><td colspan="3" class="subtext">No courses assigned yet.</td></tr>

@@ -35,6 +35,23 @@ class User(UserMixin, db.Model):
     def check_password(self, pw):
         return check_password_hash(self.password_hash, pw)
 
+    _TITLES = {"dr", "dr.", "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "prof", "prof.", "professor"}
+
+    @property
+    def first_name(self):
+        words = [w for w in (self.full_name or "").split() if w.lower() not in self._TITLES]
+        return words[0] if words else (self.username or "?")
+
+    @property
+    def initials(self):
+        """Avatar letter: first letter of the first name (titles like 'Dr.' skipped)."""
+        return self.first_name[:1].upper()
+
+    @property
+    def avatar_hue(self):
+        """A stable colour per person (0-359), so avatars are easy to tell apart."""
+        return sum(ord(c) for c in (self.username or "")) * 47 % 360
+
 
 class Course(db.Model):
     id = db.Column(db.Integer, primary_key=True)

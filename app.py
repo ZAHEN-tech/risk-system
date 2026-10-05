@@ -18,6 +18,7 @@ from risk_engine import (
     compute_risk_for_enrollment, generate_notifications_for_enrollment,
 )
 import seed_data
+import passwords
 from migrations import run_migrations
 from sqlalchemy import inspect
 import ml_engine
@@ -61,8 +62,16 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=SESSION_TIMEOUT_MIN
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 
 # --- Password and login rules -------------------------------------------------
-MIN_PASSWORD_LENGTH = 8
-DEFAULT_PASSWORD = "password123"
+MIN_PASSWORD_LENGTH = passwords.MIN_LENGTH
+APP_NAME = "UniAlert"
+ROLE_LABELS = {"admin": "Administrator", "lecturer": "Lecturer", "hod": "Head of Department",
+               "counsellor": "Counsellor", "student": "Student", "parent": "Parent / guardian"}
+# Visual themes users can switch between (stored per browser). DEFAULT_THEME sets
+# what a first-time visitor sees.
+THEMES = {"academic": "Academic (navy and gold)", "lagoon": "Lagoon (light, teal)", "night": "Night (dark)"}
+DEFAULT_THEME = os.environ.get("DEFAULT_THEME", "academic")
+if DEFAULT_THEME not in THEMES:
+    DEFAULT_THEME = "academic"
 MAX_FAILED_LOGINS = 5          # failed attempts before the account is locked...
 LOCKOUT_MINUTES = 15           # ...for this long
 
@@ -128,9 +137,26 @@ def unread_count():
     return Notification.query.filter_by(recipient_id=current_user.id, read=False).count()
 
 
+def local_now():
+    # Server time is UTC; Fiji is UTC+12. LOCAL_UTC_OFFSET_HOURS lets another campus change it.
+    return datetime.utcnow() + timedelta(hours=float(os.environ.get("LOCAL_UTC_OFFSET_HOURS", "12")))
+
+
+def greeting():
+    hour = local_now().hour
+    return "morning" if hour < 12 else "afternoon" if hour < 18 else "evening"
+
+
+def pop_new_credentials():
+    return session.pop("new_credentials", None)
+
+
 @app.context_processor
 def inject_globals():
-    return {"unread_count": unread_count, "now": datetime.utcnow()}
+    return {"unread_count": unread_count, "now": local_now(),
+            "pop_new_credentials": pop_new_credentials, "APP_NAME": APP_NAME,
+            "role_labels": ROLE_LABELS, "themes": THEMES, "default_theme": DEFAULT_THEME,
+            "greeting": greeting()}
 
 
 # ---------------------------------------------------------------- Auth ----
@@ -177,18 +203,37 @@ def login():
                     user.failed_logins = 0
                 db.session.commit()
             flash("Incorrect username or password.", "error")
-    return render_template("login.html", demo_accounts=demo_accounts_to_show())
+    return render_template("login.html")
 
 
 def password_problem(new_password, current_user_obj=None):
     """Returns an error message if the password breaks the rules, else None."""
-    if len(new_password) < MIN_PASSWORD_LENGTH:
-        return f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
-    if current_user_obj is not None and new_password == DEFAULT_PASSWORD:
-        return "Please choose a password other than the default one."
+    problem = passwords.strength_problem(
+        new_password, current_user_obj.username if current_user_obj is not None else None)
+    if problem:
+        return problem
     if current_user_obj is not None and current_user_obj.check_password(new_password):
         return "Your new password must be different from your current one."
     return None
+
+
+def admin_chosen_password(raw, username=None):
+    """For admin-set passwords: blank -> a generated strong password; otherwise the
+    typed one must pass the strength rules. Returns (password, error)."""
+    raw = (raw or "").strip()
+    if not raw:
+        return passwords.generate_password(), None
+    problem = passwords.strength_problem(raw, username)
+    return (None, problem) if problem else (raw, None)
+
+
+def share_credentials(full_name, username, password, role_label):
+    """Queue sign-in details to be shown ONCE, in a panel with a copy button, on the
+    next page the admin sees (see templates/_credentials.html). They are never
+    stored anywhere else in plain text."""
+    creds = session.get("new_credentials", [])
+    creds.append({"name": full_name, "username": username, "password": password, "role": role_label})
+    session["new_credentials"] = creds
 
 
 @app.route("/account/password", methods=["GET", "POST"])
@@ -214,6 +259,49 @@ def change_password():
                            forced=current_user.must_change_password)
 
 
+@app.route("/account/profile", methods=["GET", "POST"])
+@login_required
+def my_profile():
+    """Every user's own profile: non-sensitive details for their role, plus the
+    one thing they may change themselves (their contact email)."""
+    u = current_user
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            flash("Enter a valid email address, for example name@example.edu.", "error")
+        else:
+            u.email = email or None
+            db.session.commit()
+            flash("Email address saved.", "success")
+        return redirect(url_for("my_profile"))
+
+    details, items, items_title = [], [], None
+    if u.role == "student":
+        st = Student.query.filter_by(user_id=u.id).first()
+        if st:
+            details += [("Student number", st.student_number), ("Department", st.department.name),
+                        ("Year of study", st.year_of_study),
+                        ("Counsellor", st.counsellor.full_name if st.counsellor else "Not assigned yet"),
+                        ("Parent alerts", "Allowed for High risk" if st.parent_consent else "Not allowed")]
+            items_title = "Enrolled courses"
+            items = [f"{e.course.code} {e.course.name}" for e in st.enrollments]
+    elif u.role == "lecturer":
+        details.append(("Department", u.department.name if u.department else "Not set"))
+        items_title = "Courses you teach"
+        items = [f"{c.code} {c.name}" for c in Course.query.filter_by(lecturer_id=u.id).order_by(Course.code)]
+    elif u.role == "hod":
+        details.append(("Department", u.department.name if u.department else "Not set"))
+        if u.department:
+            details += [("Courses in department", Course.query.filter_by(department_id=u.department_id).count()),
+                        ("Lecturers in department", User.query.filter_by(role="lecturer", department_id=u.department_id, active=True).count())]
+    elif u.role == "counsellor":
+        details.append(("Students on caseload", Student.query.filter_by(counsellor_id=u.id).count()))
+    elif u.role == "parent":
+        items_title = "Linked students"
+        items = [s_.user.full_name for s_ in Student.query.filter_by(parent_id=u.id)]
+    return render_template("profile.html", u=u, details=details, items=items, items_title=items_title)
+
+
 @app.before_request
 def enforce_password_change():
     """Users flagged must_change_password (new accounts, admin resets) can only
@@ -225,55 +313,20 @@ def enforce_password_change():
 
 def _admin_reset_password(user, back_url):
     """Shared by the student, lecturer and staff profile pages."""
-    custom = request.form.get("new_password", "").strip()
-    if custom and len(custom) < MIN_PASSWORD_LENGTH:
-        flash(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.", "error")
+    new_password, problem = admin_chosen_password(request.form.get("new_password"), user.username)
+    if problem:
+        flash(problem, "error")
         return redirect(back_url)
-    new_password = custom or DEFAULT_PASSWORD
     user.set_password(new_password)
     user.must_change_password = True
     user.failed_logins = 0
     user.locked_until = None
     db.session.commit()
-    if custom:
-        flash(f"Password updated for {user.full_name}. They will be asked to change it at next sign-in.", "success")
-    else:
-        flash(f"Password reset for {user.full_name}. New password: {new_password} "
-              "(they will be asked to change it at next sign-in).", "success")
+    share_credentials(user.full_name, user.username, new_password, "New password")
+    flash(f"Password reset for {user.full_name}. They will be asked to choose their own at next sign-in.", "success")
     return redirect(back_url)
 
 
-DEMO_ACCOUNTS = [
-    ("admin", "Administrator"),
-    ("hod_1", "Head of Department"),
-    ("lect_1_1", "Lecturer"),
-    ("counsellor1", "Counsellor"),
-    ("student1", "Student"),
-    ("parent1", "Parent / Guardian"),
-]
-
-
-def demo_accounts_to_show():
-    """Demo login chips appear only when the synthetic demo dataset is really
-    loaded — detected by its demo-only usernames still existing and active —
-    rather than merely because some department exists (real departments made
-    by an admin used to make the chips appear too). SHOW_DEMO_ACCOUNTS=false
-    hides them even when demo data is present (e.g. before going public)."""
-    if os.environ.get("SHOW_DEMO_ACCOUNTS", "true").strip().lower() == "false":
-        return []
-    demo_usernames = [u for u, _ in DEMO_ACCOUNTS if u != "admin"]
-    present = {
-        u.username for u in User.query.filter(
-            User.username.in_(demo_usernames), User.active.is_(True)
-        ).all()
-    }
-    # Require the demo-only accounts (not just 'admin', which every deploy has).
-    if not {"lect_1_1", "student1"} <= present:
-        return []
-    # The admin chip is only shown locally: in production the admin password comes
-    # from ADMIN_PASSWORD, not the demo default, so advertising it would be wrong.
-    show_admin = not database_url
-    return [(u, label) for u, label in DEMO_ACCOUNTS if (u == "admin" and show_admin) or u in present]
 
 
 @app.route("/logout")
@@ -383,7 +436,7 @@ def admin_student_new():
         year_of_study = request.form.get("year_of_study", type=int) or 1
         email = request.form.get("email", "").strip()
         counsellor_id = request.form.get("counsellor_id", type=int) or None
-        password = request.form.get("password", "").strip() or DEFAULT_PASSWORD
+        password, password_error = admin_chosen_password(request.form.get("password"))
 
         parent_name = request.form.get("parent_name", "").strip()
         parent_email = request.form.get("parent_email", "").strip()
@@ -398,8 +451,8 @@ def admin_student_new():
             errors.append(f"Student ID '{student_number}' is already in use.")
         if not department_id:
             errors.append("Department is required.")
-        if len(password) < MIN_PASSWORD_LENGTH:
-            errors.append(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+        if password_error:
+            errors.append(password_error)
 
         if errors:
             for e in errors:
@@ -422,7 +475,8 @@ def admin_student_new():
             parent_username = unique_username(parent_name)
             parent_user = User(username=parent_username, full_name=parent_name, role="parent",
                                 email=parent_email or None, active=True)
-            parent_user.set_password(DEFAULT_PASSWORD)
+            parent_password = passwords.generate_password()
+            parent_user.set_password(parent_password)
             parent_user.must_change_password = True
             db.session.add(parent_user)
             db.session.flush()
@@ -453,10 +507,10 @@ def admin_student_new():
 
         db.session.commit()
 
-        msg = f"Registered {full_name} ({student_number}). Login: {username} / {password}."
+        share_credentials(full_name, username, password, "Student")
         if parent_user:
-            msg += f" Parent login: {parent_user.username} / {DEFAULT_PASSWORD}."
-        msg += " Both will be asked to choose a new password at first sign-in."
+            share_credentials(parent_user.full_name, parent_user.username, parent_password, "Parent / guardian")
+        msg = f"Registered {full_name} ({student_number})."
         if enrolled_courses:
             msg += f" Enrolled in: {', '.join(enrolled_courses)}."
         flash(msg, "success")
@@ -719,13 +773,13 @@ def admin_lecturer_new():
         full_name = request.form.get("full_name", "").strip()
         email = request.form.get("email", "").strip()
         department_id = request.form.get("department_id", type=int)
-        password = request.form.get("password", "").strip() or DEFAULT_PASSWORD
+        password, password_error = admin_chosen_password(request.form.get("password"))
 
         if not full_name:
             flash("Full name is required.", "error")
             return render_template("admin_lecturer_form.html", mode="new", departments=departments, form=request.form)
-        if len(password) < MIN_PASSWORD_LENGTH:
-            flash(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.", "error")
+        if password_error:
+            flash(password_error, "error")
             return render_template("admin_lecturer_form.html", mode="new", departments=departments, form=request.form)
         if not department_id:
             flash("Department is required.", "error")
@@ -739,8 +793,8 @@ def admin_lecturer_new():
         db.session.add(lecturer)
         db.session.commit()
 
-        flash(f"Registered {full_name}. Login: {username} / {password} "
-              "(they will be asked to choose a new password at first sign-in).", "success")
+        share_credentials(full_name, username, password, "Lecturer")
+        flash(f"Registered {full_name}. They will be asked to choose their own password at first sign-in.", "success")
         return redirect(url_for("admin_lecturer_profile", lecturer_id=lecturer.id))
 
     return render_template("admin_lecturer_form.html", mode="new", departments=departments, form={})
@@ -887,7 +941,7 @@ def admin_staff_new():
         email = request.form.get("email", "").strip()
         role = request.form.get("role", "")
         department_id = request.form.get("department_id", type=int) or None
-        password = request.form.get("password", "").strip()
+        password, password_error = admin_chosen_password(request.form.get("password"))
 
         errors = []
         if not full_name:
@@ -900,15 +954,14 @@ def admin_staff_new():
             elif active_hod_for(department_id):
                 errors.append(f"{active_hod_for(department_id).full_name} is already the active Head of "
                               "this department. Deactivate them first, or choose another department.")
-        if password and len(password) < MIN_PASSWORD_LENGTH:
-            errors.append(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+        if password_error:
+            errors.append(password_error)
         if errors:
             for e in errors:
                 flash(e, "error")
             return render_template("admin_staff_form.html", mode="new", departments=departments,
                                    roles=STAFF_ROLES, form=request.form)
 
-        password = password or DEFAULT_PASSWORD
         username = unique_username(full_name)
         user = User(username=username, full_name=full_name, role=role,
                     department_id=department_id, email=email or None, active=True)
@@ -916,8 +969,9 @@ def admin_staff_new():
         user.must_change_password = True
         db.session.add(user)
         db.session.commit()
-        flash(f"Registered {full_name} as {STAFF_ROLES[role]}. Login: {username} / {password} "
-              "(they will be asked to choose a new password at first sign-in).", "success")
+        share_credentials(full_name, username, password, STAFF_ROLES[role])
+        flash(f"Registered {full_name} as {STAFF_ROLES[role]}. They will be asked to choose their "
+              "own password at first sign-in.", "success")
         return redirect(url_for("admin_staff_profile", user_id=user.id))
 
     return render_template("admin_staff_form.html", mode="new", departments=departments,

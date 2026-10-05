@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% from "_password_field.html" import password_field %}
 {% block title %}{{ staff.full_name }}{% endblock %}
 {% block content %}
-<div class="eyebrow"><a href="{{ url_for('admin_staff_list') }}">← Staff accounts</a></div>
+<div class="eyebrow"><a href="{{ url_for('admin_staff_list') }}">← Heads &amp; counsellors</a></div>
 <div class="page-title">
   <h1>{{ staff.full_name }}</h1>
   <div class="btn-row">
@@ -28,14 +29,10 @@
         style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;"
         onsubmit="return confirm('Update this login password?');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="field" style="margin-bottom:0; min-width:220px;">
-      <label for="new_password">Set a new password</label>
-      <input type="text" id="new_password" name="new_password" placeholder="Leave blank to reset to password123">
-    </div>
+    <div style="flex:1; min-width:300px;">{{ password_field("new_password", "Set a new password", optional=True, hint=False) }}</div>
     <button class="btn secondary" type="submit">Update password</button>
   </form>
-  <p class="subtext" style="margin-top:8px;">At least 8 characters, or leave blank to reset to the default. The user
-    will be asked to choose their own password at next sign-in.</p>
+  <p class="subtext" style="margin-top:8px;">Type a strong password or leave the field blank to generate one. The new sign-in details are shown once, and the user must choose their own password at next sign-in.</p>
 </div>
 
 {% if staff.role == 'counsellor' %}

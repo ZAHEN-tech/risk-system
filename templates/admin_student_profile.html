@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_password_field.html" import password_field %}
 {% from "_risk_table.html" import risk_table %}
 {% block title %}{{ student.user.full_name }}{% endblock %}
 {% block content %}
@@ -30,15 +31,10 @@
   <form method="post" action="{{ url_for('admin_student_reset_password', student_id=student.id) }}"
         style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;"
         onsubmit="return confirm('Update this student\'s login password?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="field" style="margin-bottom:0; min-width:220px;">
-      <label for="new_password">Set a new password</label>
-      <input type="text" id="new_password" name="new_password" placeholder="Leave blank to reset to password123">
-    </div>
+    <div style="flex:1; min-width:300px;">{{ password_field("new_password", "Set a new password", optional=True, hint=False) }}</div>
     <button class="btn secondary" type="submit">Update password</button>
   </form>
-  <p class="subtext" style="margin-top:8px;">Type a specific password to set it directly, or leave the field blank
-    to reset to the default (<code>password123</code>). The student can't change their own password — this is
-    the only way to update it.</p>
+  <p class="subtext" style="margin-top:8px;">Type a strong password or leave the field blank to generate one. The new sign-in details are shown once, and the user must choose their own password at next sign-in.</p>
 </div>
 
 <div class="panel">

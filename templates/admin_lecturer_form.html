@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_password_field.html" import password_field %}
 {% block title %}{{ 'Register Lecturer' if mode=='new' else 'Edit Lecturer' }}{% endblock %}
 {% block content %}
 <div class="eyebrow"><a href="{{ url_for('admin_lecturers_list') }}">← Lecturer management</a></div>
@@ -31,10 +32,7 @@
     </div>
 
     {% if mode == 'new' %}
-    <div class="field">
-      <label for="password">Initial password</label>
-      <input type="text" id="password" name="password" placeholder="password123" value="{{ form.get('password','') }}">
-    </div>
+    {{ password_field("password", "Initial password", optional=True, value=form.get("password","")) }}
     {% endif %}
 
     <div class="btn-row" style="margin-top:18px;">

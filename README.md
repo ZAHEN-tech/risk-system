@@ -27,8 +27,7 @@ assessment entry, dashboards, reports). Current status:
 
 - **Staff accounts screen** (`/admin/staff`): admins can create, edit, deactivate and reset passwords for
   Heads of Department and Counsellors. Only one active HoD per department is allowed.
-- **Login page demo chips** only appear when the demo dataset is really loaded. Set
-  `SHOW_DEMO_ACCOUNTS=false` to hide them even then.
+- **Login page** no longer shows any demo account details.
 - **Security**: CSRF tokens on every form (Flask-WTF); accounts lock for 15 minutes after 5 failed
   sign-ins; session cookies are HttpOnly, SameSite=Lax and (in production) Secure, with a 60-minute
   inactivity timeout (`SESSION_TIMEOUT_MINUTES`); passwords must be at least 8 characters; new accounts
@@ -40,6 +39,12 @@ assessment entry, dashboards, reports). Current status:
   automatically during `init_db.py` (idempotent, single transaction).
 - **Dependencies**: SQLAlchemy pinned to 2.0.x — SQLAlchemy 2.1 changed the default PostgreSQL driver
   and would fail to start with `psycopg2-binary`.
+
+- **UniAlert redesign**: new name and logo; three switchable themes (Academic, Lagoon, Night) chosen from
+  the account menu or the login page and remembered per browser (`DEFAULT_THEME` sets the starting one);
+  theme-aware charts with gradients and rounded bars; avatar menu with **My profile** for every user.
+- **Passwords**: no shared default password. Admins type a strong password (10+ characters, three of
+  four character groups) or leave it blank / click **Generate** for a random one, shown once with a copy button.
 
 ## Quick start
 

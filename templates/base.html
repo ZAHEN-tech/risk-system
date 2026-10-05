@@ -1,61 +1,101 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{ default_theme }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Student Risk & Early Intervention{% endblock %}</title>
+<title>{% block title %}Dashboard{% endblock %} · {{ APP_NAME }}</title>
+<script>
+  /* Apply the saved theme before the page paints, so it never flashes. */
+  try { var t = localStorage.getItem('ua-theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+</script>
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
+{% from "_ui.html" import icon, logo %}
 <div class="shell">
-  <aside class="sidebar">
-    <div class="brand">Ledger<br>Early&nbsp;Alert
-      <small>Student risk &amp; intervention register</small>
-    </div>
-    <nav>
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="{{ url_for('index') }}">
+      {{ logo(34) }}
+      <span class="brand-text"><span class="brand-name">{{ APP_NAME }}</span>
+        <span class="brand-tag">Student early-warning system</span></span>
+    </a>
+    <nav aria-label="Main">
       {% if current_user.is_authenticated %}
         {% set home = {'admin':'admin_dashboard','lecturer':'lecturer_dashboard','hod':'hod_dashboard','counsellor':'counsellor_dashboard','student':'student_dashboard','parent':'parent_dashboard'}[current_user.role] %}
-        <a class="nav-item {{ 'active' if request.endpoint==home }}" href="{{ url_for(home) }}">Dashboard</a>
+        {% set ep = request.endpoint or '' %}
+        <a class="nav-item {{ 'active' if ep==home }}" href="{{ url_for(home) }}">{{ icon('dashboard') }}<span>Dashboard</span></a>
         {% if current_user.role == 'admin' %}
-        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_department') }}" href="{{ url_for('admin_departments') }}">Departments</a>
-        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_course') }}" href="{{ url_for('admin_courses_list') }}">Courses</a>
-        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_student') }}" href="{{ url_for('admin_students_list') }}">Students</a>
-        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_lecturer') }}" href="{{ url_for('admin_lecturers_list') }}">Lecturers</a>
-        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_staff') }}" href="{{ url_for('admin_staff_list') }}">Staff accounts</a>
-        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_model') }}" href="{{ url_for('admin_model') }}">Predictive model</a>
+        <div class="nav-group">Records</div>
+        <a class="nav-item {{ 'active' if ep.startswith('admin_department') }}" href="{{ url_for('admin_departments') }}">{{ icon('department') }}<span>Departments</span></a>
+        <a class="nav-item {{ 'active' if ep.startswith('admin_course') }}" href="{{ url_for('admin_courses_list') }}">{{ icon('course') }}<span>Courses</span></a>
+        <a class="nav-item {{ 'active' if ep.startswith('admin_student') }}" href="{{ url_for('admin_students_list') }}">{{ icon('students') }}<span>Students</span></a>
+        <div class="nav-group">People</div>
+        <a class="nav-item {{ 'active' if ep.startswith('admin_lecturer') }}" href="{{ url_for('admin_lecturers_list') }}">{{ icon('lecturer') }}<span>Lecturers</span></a>
+        <a class="nav-item {{ 'active' if ep.startswith('admin_staff') }}" href="{{ url_for('admin_staff_list') }}">{{ icon('staff') }}<span>Heads &amp; counsellors</span></a>
+        <div class="nav-group">Insight</div>
+        <a class="nav-item {{ 'active' if ep.startswith('admin_model') }}" href="{{ url_for('admin_model') }}">{{ icon('model') }}<span>Predictive model</span></a>
         {% endif %}
         {% set reports_route = {'admin':'admin_reports','hod':'hod_reports','lecturer':'lecturer_reports','counsellor':'counsellor_reports'}.get(current_user.role) %}
         {% if reports_route %}
-        <a class="nav-item {{ 'active' if request.endpoint==reports_route }}" href="{{ url_for(reports_route) }}">Reports</a>
+        <a class="nav-item {{ 'active' if ep==reports_route }}" href="{{ url_for(reports_route) }}">{{ icon('reports') }}<span>Reports</span></a>
         {% endif %}
-        <a class="nav-item {{ 'active' if request.endpoint=='all_notifications' }}" href="{{ url_for('all_notifications') }}">
-          Notifications
+        <a class="nav-item {{ 'active' if ep=='all_notifications' }}" href="{{ url_for('all_notifications') }}">{{ icon('bell') }}<span>Notifications</span>
           {% if unread_count() %}<span class="nav-badge">{{ unread_count() }}</span>{% endif %}
         </a>
       {% endif %}
     </nav>
-    {% if current_user.is_authenticated %}
-    <div class="sidebar-foot">
-      Signed in as<br><strong>{{ current_user.full_name }}</strong><br>
-      <span style="text-transform:capitalize">{{ current_user.role }}</span>
-      <form method="post" action="{{ url_for('logout') }}" style="display:none" id="logout-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
-      <br><a href="{{ url_for('change_password') }}">Change password</a>
-      &nbsp;·&nbsp; <a href="{{ url_for('logout') }}">Sign out</a>
-    </div>
-    {% endif %}
   </aside>
-  <main>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="flash {{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-    {% block content %}{% endblock %}
-  </main>
+
+  <div class="main-col">
+    {% if current_user.is_authenticated %}
+    <header class="topbar">
+      <button class="icon-btn menu-btn" type="button" data-menu-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Open menu">{{ icon('menu', 22) }}</button>
+      <div class="topbar-date">{{ now.strftime('%A %d %B %Y') }}</div>
+      <div class="account" data-dropdown>
+        <button class="account-btn" type="button" data-dropdown-toggle aria-haspopup="menu" aria-expanded="false">
+          <span class="avatar" style="--hue: {{ current_user.avatar_hue }}">{{ current_user.initials }}</span>
+          <span class="account-meta"><span class="account-name">{{ current_user.full_name }}</span>
+            <span class="account-role">{{ role_labels[current_user.role] }}</span></span>
+        </button>
+        <div class="dropdown" role="menu" hidden>
+          <div class="dropdown-head">
+            <span class="avatar large" style="--hue: {{ current_user.avatar_hue }}">{{ current_user.initials }}</span>
+            <div><strong>{{ current_user.full_name }}</strong><div class="subtext">{{ current_user.username }}</div></div>
+          </div>
+          <a role="menuitem" href="{{ url_for('my_profile') }}">{{ icon('user') }} My profile</a>
+          <a role="menuitem" href="{{ url_for('change_password') }}">{{ icon('key') }} Change password</a>
+          <div class="dropdown-theme">
+            <span>{{ icon('palette') }} Theme</span>
+            <div class="theme-picker" role="radiogroup" aria-label="Theme">
+              {% for key, label in themes.items() %}
+              <button type="button" class="theme-swatch swatch-{{ key }}" data-theme-choice="{{ key }}" role="radio" aria-label="{{ label }}" title="{{ label }}"></button>
+              {% endfor %}
+            </div>
+          </div>
+          <a role="menuitem" class="danger" href="{{ url_for('logout') }}">{{ icon('logout') }} Sign out</a>
+        </div>
+      </div>
+    </header>
+    {% endif %}
+    <main id="main">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash {{ category }}" role="status">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      {% include "_credentials.html" %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 </div>
 <script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ui.js') }}"></script>
 <script src="{{ url_for('static', filename='js/charts-init.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>

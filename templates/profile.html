@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}My profile{% endblock %}
+{% block content %}
+<div class="profile-head">
+  <span class="avatar xl" style="--hue: {{ u.avatar_hue }}">{{ u.initials }}</span>
+  <div>
+    <h1>{{ u.full_name }}</h1>
+    <p class="subtext">{{ role_labels[u.role] }}{% if u.department %}, {{ u.department.name }}{% endif %}</p>
+  </div>
+</div>
+
+<div class="profile-grid">
+  <section class="panel">
+    <h3>Account</h3>
+    <dl class="details">
+      <dt>Username</dt><dd><code>{{ u.username }}</code></dd>
+      <dt>Role</dt><dd>{{ role_labels[u.role] }}</dd>
+      {% for label, value in details %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}
+    </dl>
+    <a class="btn secondary" href="{{ url_for('change_password') }}">Change password</a>
+  </section>
+
+  <section class="panel">
+    <h3>Contact email</h3>
+    <p class="subtext">Used by the institution to contact you. Other users cannot see it.</p>
+    <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="email">Email address</label>
+        <input type="email" id="email" name="email" value="{{ u.email or '' }}" placeholder="name@example.edu">
+      </div>
+      <button class="btn" type="submit">Save email</button>
+    </form>
+  </section>
+
+  {% if items_title %}
+  <section class="panel">
+    <h3>{{ items_title }}</h3>
+    {% if items %}
+    <ul class="plain-list">{% for i in items %}<li>{{ i }}</li>{% endfor %}</ul>
+    {% else %}<p class="subtext">None yet.</p>{% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
