@@ -52,9 +52,9 @@
     system and LMS on a schedule (e.g. nightly). In this prototype you can seed a synthetic dataset and trigger
     the risk engine manually.</p>
   <div class="btn-row">
-    <form method="post" action="{{ url_for('admin_seed') }}"><button class="btn secondary" type="submit">Seed demo dataset</button></form>
-    <form method="post" action="{{ url_for('admin_recompute') }}"><button class="btn" type="submit">Recompute risk & send alerts</button></form>
-    <form method="post" action="{{ url_for('admin_reset') }}" onsubmit="return confirm('This wipes all data. Continue?');"><button class="btn secondary" type="submit">Reset database</button></form>
+    <form method="post" action="{{ url_for('admin_seed') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn secondary" type="submit">Seed demo dataset</button></form>
+    <form method="post" action="{{ url_for('admin_recompute') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">Recompute risk & send alerts</button></form>
+    <form method="post" action="{{ url_for('admin_reset') }}" onsubmit="return confirm('This wipes all data. Continue?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn secondary" type="submit">Reset database</button></form>
   </div>
 </div>
 

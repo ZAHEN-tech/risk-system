@@ -9,7 +9,7 @@
 <div class="panel">
   <p class="subtext">Leave a score blank for a student who hasn't submitted — that's tracked as a missed
     submission and factors into their risk score. Saving updates risk scores and may trigger alerts.</p>
-  <form method="post">
+  <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <table>
       <thead><tr><th>Student</th><th>Score (/ {{ definition.max_score|int }})</th></tr></thead>
       <tbody>

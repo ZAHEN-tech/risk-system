@@ -40,7 +40,7 @@
 {% if editable %}
 <div class="panel">
   <h3>Log an intervention</h3>
-  <form method="post">
+  <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field">
       <label for="note">Notes</label>
       <textarea id="note" name="note" placeholder="What was discussed, observed, or agreed with the student..." required></textarea>

@@ -23,6 +23,24 @@ assessment entry, dashboards, reports). Current status:
 | 7. Dashboard (totals shown; graphs) | ✅ Done |
 | 8. Reports Module (exportable reports) | ✅ Done |
 
+## Recent changes (October 2026)
+
+- **Staff accounts screen** (`/admin/staff`): admins can create, edit, deactivate and reset passwords for
+  Heads of Department and Counsellors. Only one active HoD per department is allowed.
+- **Login page demo chips** only appear when the demo dataset is really loaded. Set
+  `SHOW_DEMO_ACCOUNTS=false` to hide them even then.
+- **Security**: CSRF tokens on every form (Flask-WTF); accounts lock for 15 minutes after 5 failed
+  sign-ins; session cookies are HttpOnly, SameSite=Lax and (in production) Secure, with a 60-minute
+  inactivity timeout (`SESSION_TIMEOUT_MINUTES`); passwords must be at least 8 characters; new accounts
+  and admin password resets must choose their own password at next sign-in.
+- **Parent consent** now defaults to off (opt-in).
+- **Database**: unique rules on course code, enrolment (student + course), attendance (enrolment + week)
+  and marks (enrolment + item). The `assessment` table no longer repeats title / sequence / max score;
+  every mark links to an `assessment_definition`. `migrations.py` upgrades an existing database
+  automatically during `init_db.py` (idempotent, single transaction).
+- **Dependencies**: SQLAlchemy pinned to 2.0.x — SQLAlchemy 2.1 changed the default PostgreSQL driver
+  and would fail to start with `psycopg2-binary`.
+
 ## Quick start
 
 **Windows:** just double-click `run.bat` in the project folder. The first time,

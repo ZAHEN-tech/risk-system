@@ -1,11 +1,12 @@
 import os
 import re
 import secrets
-from datetime import datetime
-from flask import Flask, render_template, redirect, url_for, request, flash, abort, Response
+from datetime import datetime, timedelta
+from flask import Flask, render_template, redirect, url_for, request, flash, abort, Response, session
 from flask_login import (
     LoginManager, login_user, logout_user, login_required, current_user
 )
+from flask_wtf.csrf import CSRFProtect, CSRFError
 
 from models import (
     db, User, Department, Course, Student, Enrollment,
@@ -17,6 +18,8 @@ from risk_engine import (
     compute_risk_for_enrollment, generate_notifications_for_enrollment,
 )
 import seed_data
+from migrations import run_migrations
+from sqlalchemy import inspect
 import ml_engine
 import analytics
 import reports
@@ -43,11 +46,52 @@ else:
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+# --- Session cookie security -------------------------------------------------
+# HttpOnly stops page scripts reading the cookie; SameSite=Lax blocks it being sent
+# on cross-site form posts; Secure (HTTPS only) is switched on whenever we run
+# against a real database, i.e. in production behind Render's HTTPS.
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+_secure_env = os.environ.get("SESSION_COOKIE_SECURE", "").strip().lower()
+app.config["SESSION_COOKIE_SECURE"] = (_secure_env == "true") if _secure_env in ("true", "false") else bool(database_url)
+# Sign users out after this many minutes of inactivity (the session cookie is
+# refreshed on every request, so the clock restarts whenever the user does something).
+SESSION_TIMEOUT_MINUTES = int(os.environ.get("SESSION_TIMEOUT_MINUTES", "60"))
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+app.config["SESSION_REFRESH_EACH_REQUEST"] = True
+
+# --- Password and login rules -------------------------------------------------
+MIN_PASSWORD_LENGTH = 8
+DEFAULT_PASSWORD = "password123"
+MAX_FAILED_LOGINS = 5          # failed attempts before the account is locked...
+LOCKOUT_MINUTES = 15           # ...for this long
+
 db.init_app(app)
+
+# --- CSRF protection ----------------------------------------------------------
+# Every POST form must carry a hidden csrf_token field (see templates); requests
+# without a valid token are rejected, so other websites cannot submit forms on a
+# signed-in user's behalf.
+csrf = CSRFProtect(app)
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    flash("Your form expired or was not valid. Please try again.", "error")
+    return redirect(request.referrer or url_for("index"))
 
 login_manager = LoginManager()
 login_manager.login_view = "login"
 login_manager.init_app(app)
+
+
+# Upgrade an existing production database before serving requests. Safe with
+# several workers: run_migrations() takes a PostgreSQL advisory lock and every
+# step is idempotent. (Locally, `python app.py` runs initialize_database() below.)
+if database_url and os.environ.get("RUN_MIGRATIONS_ON_START", "true").strip().lower() == "true":
+    with app.app_context():
+        if inspect(db.engine).has_table("user"):
+            run_migrations(db)
 
 
 @login_manager.user_loader
@@ -106,22 +150,130 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         user = User.query.filter_by(username=username).first()
-        if user and not user.active:
-            flash("This account has been deactivated. Contact your administrator.", "error")
+        now = datetime.utcnow()
+
+        if user and user.locked_until and user.locked_until > now:
+            minutes = max(1, int((user.locked_until - now).total_seconds() // 60) + 1)
+            flash(f"Too many failed sign-in attempts. Try again in {minutes} minute(s), "
+                  "or ask your administrator to reset your password.", "error")
         elif user and user.check_password(password):
-            login_user(user)
-            return redirect(url_for(ROLE_HOME[user.role]))
+            if not user.active:
+                flash("This account has been deactivated. Contact your administrator.", "error")
+            else:
+                user.failed_logins = 0
+                user.locked_until = None
+                db.session.commit()
+                session.permanent = True   # enables the inactivity timeout
+                login_user(user)
+                if user.must_change_password:
+                    flash("Please choose a new password before continuing.", "info")
+                    return redirect(url_for("change_password"))
+                return redirect(url_for(ROLE_HOME[user.role]))
         else:
+            if user:
+                user.failed_logins = (user.failed_logins or 0) + 1
+                if user.failed_logins >= MAX_FAILED_LOGINS:
+                    user.locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
+                    user.failed_logins = 0
+                db.session.commit()
             flash("Incorrect username or password.", "error")
-    demo_accounts = [
-        ("admin", "Administrator"),
-        ("hod_1", "Head of Department"),
-        ("lect_1_1", "Lecturer"),
-        ("counsellor1", "Counsellor"),
-        ("student1", "Student"),
-        ("parent1", "Parent / Guardian"),
-    ] if Department.query.first() else []
-    return render_template("login.html", demo_accounts=demo_accounts)
+    return render_template("login.html", demo_accounts=demo_accounts_to_show())
+
+
+def password_problem(new_password, current_user_obj=None):
+    """Returns an error message if the password breaks the rules, else None."""
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+        return f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+    if current_user_obj is not None and new_password == DEFAULT_PASSWORD:
+        return "Please choose a password other than the default one."
+    if current_user_obj is not None and current_user_obj.check_password(new_password):
+        return "Your new password must be different from your current one."
+    return None
+
+
+@app.route("/account/password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    if request.method == "POST":
+        current = request.form.get("current_password", "")
+        new = request.form.get("new_password", "")
+        confirm = request.form.get("confirm_password", "")
+        if not current_user.check_password(current):
+            flash("Your current password is incorrect.", "error")
+        elif new != confirm:
+            flash("The new passwords do not match.", "error")
+        elif password_problem(new, current_user):
+            flash(password_problem(new, current_user), "error")
+        else:
+            current_user.set_password(new)
+            current_user.must_change_password = False
+            db.session.commit()
+            flash("Password changed.", "success")
+            return redirect(url_for(ROLE_HOME[current_user.role]))
+    return render_template("change_password.html", min_length=MIN_PASSWORD_LENGTH,
+                           forced=current_user.must_change_password)
+
+
+@app.before_request
+def enforce_password_change():
+    """Users flagged must_change_password (new accounts, admin resets) can only
+    reach the change-password page and sign-out until they pick their own."""
+    if (current_user.is_authenticated and getattr(current_user, "must_change_password", False)
+            and request.endpoint not in ("change_password", "logout", "static")):
+        return redirect(url_for("change_password"))
+
+
+def _admin_reset_password(user, back_url):
+    """Shared by the student, lecturer and staff profile pages."""
+    custom = request.form.get("new_password", "").strip()
+    if custom and len(custom) < MIN_PASSWORD_LENGTH:
+        flash(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.", "error")
+        return redirect(back_url)
+    new_password = custom or DEFAULT_PASSWORD
+    user.set_password(new_password)
+    user.must_change_password = True
+    user.failed_logins = 0
+    user.locked_until = None
+    db.session.commit()
+    if custom:
+        flash(f"Password updated for {user.full_name}. They will be asked to change it at next sign-in.", "success")
+    else:
+        flash(f"Password reset for {user.full_name}. New password: {new_password} "
+              "(they will be asked to change it at next sign-in).", "success")
+    return redirect(back_url)
+
+
+DEMO_ACCOUNTS = [
+    ("admin", "Administrator"),
+    ("hod_1", "Head of Department"),
+    ("lect_1_1", "Lecturer"),
+    ("counsellor1", "Counsellor"),
+    ("student1", "Student"),
+    ("parent1", "Parent / Guardian"),
+]
+
+
+def demo_accounts_to_show():
+    """Demo login chips appear only when the synthetic demo dataset is really
+    loaded — detected by its demo-only usernames still existing and active —
+    rather than merely because some department exists (real departments made
+    by an admin used to make the chips appear too). SHOW_DEMO_ACCOUNTS=false
+    hides them even when demo data is present (e.g. before going public)."""
+    if os.environ.get("SHOW_DEMO_ACCOUNTS", "true").strip().lower() == "false":
+        return []
+    demo_usernames = [u for u, _ in DEMO_ACCOUNTS if u != "admin"]
+    present = {
+        u.username for u in User.query.filter(
+            User.username.in_(demo_usernames), User.active.is_(True)
+        ).all()
+    }
+    # Require the demo-only accounts (not just 'admin', which every deploy has).
+    if not {"lect_1_1", "student1"} <= present:
+        return []
+    # The admin chip is only shown locally: in production the admin password comes
+    # from ADMIN_PASSWORD, not the demo default, so advertising it would be wrong.
+    show_admin = not database_url
+    return [(u, label) for u, label in DEMO_ACCOUNTS if (u == "admin" and show_admin) or u in present]
 
 
 @app.route("/logout")
@@ -231,7 +383,7 @@ def admin_student_new():
         year_of_study = request.form.get("year_of_study", type=int) or 1
         email = request.form.get("email", "").strip()
         counsellor_id = request.form.get("counsellor_id", type=int) or None
-        password = request.form.get("password", "").strip() or "password123"
+        password = request.form.get("password", "").strip() or DEFAULT_PASSWORD
 
         parent_name = request.form.get("parent_name", "").strip()
         parent_email = request.form.get("parent_email", "").strip()
@@ -246,6 +398,8 @@ def admin_student_new():
             errors.append(f"Student ID '{student_number}' is already in use.")
         if not department_id:
             errors.append("Department is required.")
+        if len(password) < MIN_PASSWORD_LENGTH:
+            errors.append(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
 
         if errors:
             for e in errors:
@@ -259,6 +413,7 @@ def admin_student_new():
         s_user = User(username=username, full_name=full_name, role="student",
                       department_id=department_id, email=email or None, active=True)
         s_user.set_password(password)
+        s_user.must_change_password = True
         db.session.add(s_user)
         db.session.flush()
 
@@ -267,7 +422,8 @@ def admin_student_new():
             parent_username = unique_username(parent_name)
             parent_user = User(username=parent_username, full_name=parent_name, role="parent",
                                 email=parent_email or None, active=True)
-            parent_user.set_password("password123")
+            parent_user.set_password(DEFAULT_PASSWORD)
+            parent_user.must_change_password = True
             db.session.add(parent_user)
             db.session.flush()
 
@@ -299,7 +455,8 @@ def admin_student_new():
 
         msg = f"Registered {full_name} ({student_number}). Login: {username} / {password}."
         if parent_user:
-            msg += f" Parent login: {parent_user.username} / password123."
+            msg += f" Parent login: {parent_user.username} / {DEFAULT_PASSWORD}."
+        msg += " Both will be asked to choose a new password at first sign-in."
         if enrolled_courses:
             msg += f" Enrolled in: {', '.join(enrolled_courses)}."
         flash(msg, "success")
@@ -376,15 +533,7 @@ def admin_student_toggle_active(student_id):
 @role_required("admin")
 def admin_student_reset_password(student_id):
     student = Student.query.get_or_404(student_id)
-    custom = request.form.get("new_password", "").strip()
-    new_password = custom or "password123"
-    student.user.set_password(new_password)
-    db.session.commit()
-    if custom:
-        flash(f"Password updated for {student.user.full_name}.", "success")
-    else:
-        flash(f"Password reset for {student.user.full_name}. New password: {new_password}", "success")
-    return redirect(url_for("admin_student_profile", student_id=student.id))
+    return _admin_reset_password(student.user, url_for("admin_student_profile", student_id=student.id))
 
 
 @app.route("/admin/students/<int:student_id>/enroll", methods=["POST"])
@@ -489,6 +638,9 @@ def admin_course_new():
         if not code or not name or not department_id:
             flash("Course code, name, and department are all required.", "error")
             return render_template("admin_course_form.html", departments=departments, lecturers=lecturers, form=request.form)
+        if Course.query.filter(db.func.upper(Course.code) == code).first():
+            flash(f"Course code {code} is already in use.", "error")
+            return render_template("admin_course_form.html", departments=departments, lecturers=lecturers, form=request.form)
 
         db.session.add(Course(code=code, name=name, department_id=department_id, lecturer_id=lecturer_id))
         db.session.commit()
@@ -511,6 +663,9 @@ def admin_course_edit(course_id):
         name = request.form.get("name", "").strip()
         if not code or not name:
             flash("Course code and name are required.", "error")
+            return redirect(url_for("admin_course_edit", course_id=course.id))
+        if Course.query.filter(db.func.upper(Course.code) == code, Course.id != course.id).first():
+            flash(f"Course code {code} is already in use.", "error")
             return redirect(url_for("admin_course_edit", course_id=course.id))
         course.code = code
         course.name = name
@@ -564,10 +719,13 @@ def admin_lecturer_new():
         full_name = request.form.get("full_name", "").strip()
         email = request.form.get("email", "").strip()
         department_id = request.form.get("department_id", type=int)
-        password = request.form.get("password", "").strip() or "password123"
+        password = request.form.get("password", "").strip() or DEFAULT_PASSWORD
 
         if not full_name:
             flash("Full name is required.", "error")
+            return render_template("admin_lecturer_form.html", mode="new", departments=departments, form=request.form)
+        if len(password) < MIN_PASSWORD_LENGTH:
+            flash(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.", "error")
             return render_template("admin_lecturer_form.html", mode="new", departments=departments, form=request.form)
         if not department_id:
             flash("Department is required.", "error")
@@ -577,10 +735,12 @@ def admin_lecturer_new():
         lecturer = User(username=username, full_name=full_name, role="lecturer",
                          department_id=department_id, email=email or None, active=True)
         lecturer.set_password(password)
+        lecturer.must_change_password = True
         db.session.add(lecturer)
         db.session.commit()
 
-        flash(f"Registered {full_name}. Login: {username} / {password}.", "success")
+        flash(f"Registered {full_name}. Login: {username} / {password} "
+              "(they will be asked to choose a new password at first sign-in).", "success")
         return redirect(url_for("admin_lecturer_profile", lecturer_id=lecturer.id))
 
     return render_template("admin_lecturer_form.html", mode="new", departments=departments, form={})
@@ -641,15 +801,7 @@ def admin_lecturer_toggle_active(lecturer_id):
 @role_required("admin")
 def admin_lecturer_reset_password(lecturer_id):
     lecturer = User.query.filter_by(id=lecturer_id, role="lecturer").first_or_404()
-    custom = request.form.get("new_password", "").strip()
-    new_password = custom or "password123"
-    lecturer.set_password(new_password)
-    db.session.commit()
-    if custom:
-        flash(f"Password updated for {lecturer.full_name}.", "success")
-    else:
-        flash(f"Password reset for {lecturer.full_name}. New password: {new_password}", "success")
-    return redirect(url_for("admin_lecturer_profile", lecturer_id=lecturer.id))
+    return _admin_reset_password(lecturer, url_for("admin_lecturer_profile", lecturer_id=lecturer.id))
 
 
 @app.route("/admin/lecturers/<int:lecturer_id>/assign_course", methods=["POST"])
@@ -681,6 +833,168 @@ def admin_lecturer_unassign_course(lecturer_id, course_id):
     db.session.commit()
     flash(f"Unassigned {lecturer.full_name} from {course.code}. It now has no lecturer.", "success")
     return redirect(url_for("admin_lecturer_profile", lecturer_id=lecturer.id))
+
+
+# --------------------------------------------- Staff Accounts (HoD, Counsellor) -
+
+STAFF_ROLES = {"hod": "Head of Department", "counsellor": "Counsellor"}
+
+
+def staff_or_404(user_id):
+    return User.query.filter(User.id == user_id, User.role.in_(STAFF_ROLES)).first_or_404()
+
+
+def active_hod_for(department_id, exclude_id=None):
+    q = User.query.filter_by(role="hod", department_id=department_id, active=True)
+    if exclude_id:
+        q = q.filter(User.id != exclude_id)
+    return q.first()
+
+
+@app.route("/admin/staff")
+@login_required
+@role_required("admin")
+def admin_staff_list():
+    q = request.args.get("q", "").strip()
+    role = request.args.get("role", "")
+    show_inactive = request.args.get("show_inactive") == "1"
+
+    query = User.query.filter(User.role.in_(STAFF_ROLES))
+    if role in STAFF_ROLES:
+        query = query.filter(User.role == role)
+    if q:
+        query = query.filter(User.full_name.ilike(f"%{q}%"))
+    if not show_inactive:
+        query = query.filter(User.active.is_(True))
+
+    staff = query.order_by(User.role, User.full_name).all()
+    rows = [{
+        "user": u,
+        "caseload": Student.query.filter_by(counsellor_id=u.id).count() if u.role == "counsellor" else None,
+    } for u in staff]
+    return render_template("admin_staff_list.html", rows=rows, q=q, role=role,
+                           show_inactive=show_inactive, roles=STAFF_ROLES)
+
+
+@app.route("/admin/staff/new", methods=["GET", "POST"])
+@login_required
+@role_required("admin")
+def admin_staff_new():
+    departments = Department.query.order_by(Department.name).all()
+
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        email = request.form.get("email", "").strip()
+        role = request.form.get("role", "")
+        department_id = request.form.get("department_id", type=int) or None
+        password = request.form.get("password", "").strip()
+
+        errors = []
+        if not full_name:
+            errors.append("Full name is required.")
+        if role not in STAFF_ROLES:
+            errors.append("Choose a role: Head of Department or Counsellor.")
+        if role == "hod":
+            if not department_id:
+                errors.append("A Head of Department must belong to a department.")
+            elif active_hod_for(department_id):
+                errors.append(f"{active_hod_for(department_id).full_name} is already the active Head of "
+                              "this department. Deactivate them first, or choose another department.")
+        if password and len(password) < MIN_PASSWORD_LENGTH:
+            errors.append(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+        if errors:
+            for e in errors:
+                flash(e, "error")
+            return render_template("admin_staff_form.html", mode="new", departments=departments,
+                                   roles=STAFF_ROLES, form=request.form)
+
+        password = password or DEFAULT_PASSWORD
+        username = unique_username(full_name)
+        user = User(username=username, full_name=full_name, role=role,
+                    department_id=department_id, email=email or None, active=True)
+        user.set_password(password)
+        user.must_change_password = True
+        db.session.add(user)
+        db.session.commit()
+        flash(f"Registered {full_name} as {STAFF_ROLES[role]}. Login: {username} / {password} "
+              "(they will be asked to choose a new password at first sign-in).", "success")
+        return redirect(url_for("admin_staff_profile", user_id=user.id))
+
+    return render_template("admin_staff_form.html", mode="new", departments=departments,
+                           roles=STAFF_ROLES, form={})
+
+
+@app.route("/admin/staff/<int:user_id>")
+@login_required
+@role_required("admin")
+def admin_staff_profile(user_id):
+    user = staff_or_404(user_id)
+    caseload = []
+    if user.role == "counsellor":
+        caseload = (Student.query.filter_by(counsellor_id=user.id)
+                    .join(User, Student.user_id == User.id).order_by(User.full_name).all())
+    return render_template("admin_staff_profile.html", staff=user, roles=STAFF_ROLES,
+                           caseload=caseload, worst=student_worst_risk)
+
+
+@app.route("/admin/staff/<int:user_id>/edit", methods=["GET", "POST"])
+@login_required
+@role_required("admin")
+def admin_staff_edit(user_id):
+    user = staff_or_404(user_id)
+    departments = Department.query.order_by(Department.name).all()
+
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        department_id = request.form.get("department_id", type=int) or None
+        if not full_name:
+            flash("Full name is required.", "error")
+            return redirect(url_for("admin_staff_edit", user_id=user.id))
+        if user.role == "hod":
+            if not department_id:
+                flash("A Head of Department must belong to a department.", "error")
+                return redirect(url_for("admin_staff_edit", user_id=user.id))
+            other = active_hod_for(department_id, exclude_id=user.id)
+            if other and user.active:
+                flash(f"{other.full_name} is already the active Head of that department.", "error")
+                return redirect(url_for("admin_staff_edit", user_id=user.id))
+        user.full_name = full_name
+        user.email = request.form.get("email", "").strip() or None
+        user.department_id = department_id
+        db.session.commit()
+        flash("Staff details updated.", "success")
+        return redirect(url_for("admin_staff_profile", user_id=user.id))
+
+    return render_template("admin_staff_form.html", mode="edit", staff=user, departments=departments,
+                           roles=STAFF_ROLES, form={})
+
+
+@app.route("/admin/staff/<int:user_id>/toggle_active", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_staff_toggle_active(user_id):
+    user = staff_or_404(user_id)
+    if not user.active and user.role == "hod" and active_hod_for(user.department_id, exclude_id=user.id):
+        flash("Another active Head of Department already exists for this department. "
+              "Deactivate them first.", "error")
+        return redirect(url_for("admin_staff_profile", user_id=user.id))
+    user.active = not user.active
+    db.session.commit()
+    msg = f"{user.full_name} is now {'active' if user.active else 'deactivated'}."
+    if not user.active and user.role == "counsellor":
+        n = Student.query.filter_by(counsellor_id=user.id).count()
+        if n:
+            msg += f" {n} student(s) are still assigned to them — reassign them from each student's Edit page."
+    flash(msg, "success")
+    return redirect(url_for("admin_staff_profile", user_id=user.id))
+
+
+@app.route("/admin/staff/<int:user_id>/reset_password", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_staff_reset_password(user_id):
+    user = staff_or_404(user_id)
+    return _admin_reset_password(user, url_for("admin_staff_profile", user_id=user.id))
 
 
 # -------------------------------------------------------- Admin routes ----
@@ -857,12 +1171,7 @@ def lecturer_assessments(course_id):
         entries = Assessment.query.filter_by(definition_id=d.id).all()
         graded = sum(1 for e in entries if e.submitted and e.score is not None)
         rows.append({"definition": d, "graded": graded, "total": len(course.enrollments)})
-    has_legacy = (
-        Assessment.query.join(Enrollment)
-        .filter(Enrollment.course_id == course.id, Assessment.definition_id.is_(None))
-        .first() is not None
-    )
-    return render_template("lecturer_assessments.html", course=course, rows=rows, has_legacy=has_legacy)
+    return render_template("lecturer_assessments.html", course=course, rows=rows, has_legacy=False)
 
 
 @app.route("/lecturer/course/<int:course_id>/assessments/new", methods=["GET", "POST"])
@@ -895,8 +1204,7 @@ def lecturer_assessment_new(course_id):
 
         for enr in course.enrollments:
             db.session.add(Assessment(
-                enrollment_id=enr.id, definition_id=definition.id, title=title,
-                sequence=sequence, max_score=max_score, score=None, submitted=False,
+                enrollment_id=enr.id, definition_id=definition.id, score=None, submitted=False,
             ))
         db.session.commit()
 
@@ -920,8 +1228,7 @@ def lecturer_assessment_grade(course_id, definition_id):
     for enr in course.enrollments:
         if enr.id not in existing_enr_ids:
             db.session.add(Assessment(
-                enrollment_id=enr.id, definition_id=definition.id, title=definition.title,
-                sequence=definition.sequence, max_score=definition.max_score, score=None, submitted=False,
+                enrollment_id=enr.id, definition_id=definition.id, score=None, submitted=False,
             ))
     db.session.commit()
 
@@ -1329,6 +1636,8 @@ def initialize_database():
     start — see render.yaml's preDeployCommand."""
     with app.app_context():
         db.create_all()
+        # Bring databases created by older versions up to date (idempotent).
+        run_migrations(db)
 
         # Demo data (~25 synthetic students with a default password) is meant for
         # local trial use only. ON by default when running locally against SQLite,

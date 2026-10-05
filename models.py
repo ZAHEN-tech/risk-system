@@ -22,6 +22,10 @@ class User(UserMixin, db.Model):
     department_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=True, index=True)
     email = db.Column(db.String(120))
     active = db.Column(db.Boolean, default=True, nullable=False)
+    # Security fields (added by migration in migrations.py for existing databases)
+    must_change_password = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
+    failed_logins = db.Column(db.Integer, default=0, nullable=False, server_default="0")
+    locked_until = db.Column(db.DateTime, nullable=True)
 
     department = db.relationship("Department", foreign_keys=[department_id])
 
@@ -34,7 +38,7 @@ class User(UserMixin, db.Model):
 
 class Course(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(20), nullable=False)
+    code = db.Column(db.String(20), nullable=False, unique=True)
     name = db.Column(db.String(150), nullable=False)
     department_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=False, index=True)
     lecturer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
@@ -51,7 +55,7 @@ class Student(db.Model):
     year_of_study = db.Column(db.Integer, default=1)
     counsellor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
     parent_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
-    parent_consent = db.Column(db.Boolean, default=True)  # whether parent may be notified
+    parent_consent = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())  # opt-in: parent alerted only with consent
 
     user = db.relationship("User", foreign_keys=[user_id])
     department = db.relationship("Department", foreign_keys=[department_id])
@@ -61,6 +65,7 @@ class Student(db.Model):
 
 
 class Enrollment(db.Model):
+    __table_args__ = (db.UniqueConstraint("student_id", "course_id", name="uq_enrollment_student_course"),)
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey("student.id"), nullable=False, index=True)
     course_id = db.Column(db.Integer, db.ForeignKey("course.id"), nullable=False, index=True)
@@ -71,6 +76,7 @@ class Enrollment(db.Model):
 
 
 class AttendanceRecord(db.Model):
+    __table_args__ = (db.UniqueConstraint("enrollment_id", "week", name="uq_attendance_enrollment_week"),)
     id = db.Column(db.Integer, primary_key=True)
     enrollment_id = db.Column(db.Integer, db.ForeignKey("enrollment.id"), nullable=False, index=True)
     week = db.Column(db.Integer, nullable=False, index=True)
@@ -96,14 +102,27 @@ class AssessmentDefinition(db.Model):
 
 
 class Assessment(db.Model):
+    """One student's mark for one assessment item. Item details (title, order in
+    term, max score) live only on AssessmentDefinition (3NF); the read-only
+    properties below expose them so callers can keep writing a.title etc."""
+    __table_args__ = (db.UniqueConstraint("enrollment_id", "definition_id", name="uq_assessment_enrollment_definition"),)
     id = db.Column(db.Integer, primary_key=True)
     enrollment_id = db.Column(db.Integer, db.ForeignKey("enrollment.id"), nullable=False, index=True)
-    definition_id = db.Column(db.Integer, db.ForeignKey("assessment_definition.id"), nullable=True, index=True)
-    title = db.Column(db.String(120), nullable=False)
-    sequence = db.Column(db.Integer, nullable=False)  # order in the term, for trend analysis
-    max_score = db.Column(db.Float, default=100.0)
+    definition_id = db.Column(db.Integer, db.ForeignKey("assessment_definition.id"), nullable=False, index=True)
     score = db.Column(db.Float, nullable=True)  # null = not submitted
     submitted = db.Column(db.Boolean, default=True)
+
+    @property
+    def title(self):
+        return self.definition.title
+
+    @property
+    def sequence(self):
+        return self.definition.sequence
+
+    @property
+    def max_score(self):
+        return self.definition.max_score
 
 
 class RiskScore(db.Model):

@@ -21,6 +21,7 @@
         <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_course') }}" href="{{ url_for('admin_courses_list') }}">Courses</a>
         <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_student') }}" href="{{ url_for('admin_students_list') }}">Students</a>
         <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_lecturer') }}" href="{{ url_for('admin_lecturers_list') }}">Lecturers</a>
+        <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_staff') }}" href="{{ url_for('admin_staff_list') }}">Staff accounts</a>
         <a class="nav-item {{ 'active' if request.endpoint and request.endpoint.startswith('admin_model') }}" href="{{ url_for('admin_model') }}">Predictive model</a>
         {% endif %}
         {% set reports_route = {'admin':'admin_reports','hod':'hod_reports','lecturer':'lecturer_reports','counsellor':'counsellor_reports'}.get(current_user.role) %}
@@ -37,8 +38,9 @@
     <div class="sidebar-foot">
       Signed in as<br><strong>{{ current_user.full_name }}</strong><br>
       <span style="text-transform:capitalize">{{ current_user.role }}</span>
-      <form method="post" action="{{ url_for('logout') }}" style="display:none" id="logout-form"></form>
-      <a href="{{ url_for('logout') }}">Sign out</a>
+      <form method="post" action="{{ url_for('logout') }}" style="display:none" id="logout-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+      <br><a href="{{ url_for('change_password') }}">Change password</a>
+      &nbsp;·&nbsp; <a href="{{ url_for('logout') }}">Sign out</a>
     </div>
     {% endif %}
   </aside>

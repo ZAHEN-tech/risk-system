@@ -6,7 +6,7 @@
   <h1>{{ lecturer.full_name }}</h1>
   <div class="btn-row">
     <a class="btn secondary" href="{{ url_for('admin_lecturer_edit', lecturer_id=lecturer.id) }}">Edit details</a>
-    <form method="post" action="{{ url_for('admin_lecturer_toggle_active', lecturer_id=lecturer.id) }}">
+    <form method="post" action="{{ url_for('admin_lecturer_toggle_active', lecturer_id=lecturer.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn secondary" type="submit">{{ 'Deactivate account' if lecturer.active else 'Reactivate account' }}</button>
     </form>
   </div>
@@ -23,7 +23,7 @@
   <h3>Account access</h3>
   <form method="post" action="{{ url_for('admin_lecturer_reset_password', lecturer_id=lecturer.id) }}"
         style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;"
-        onsubmit="return confirm('Update this lecturer\'s login password?');">
+        onsubmit="return confirm('Update this lecturer\'s login password?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field" style="margin-bottom:0; min-width:220px;">
       <label for="new_password">Set a new password</label>
       <input type="text" id="new_password" name="new_password" placeholder="Leave blank to reset to password123">
@@ -45,7 +45,7 @@
         <td>{{ c.enrollments|length }} students</td>
         <td>
           <form method="post" action="{{ url_for('admin_lecturer_unassign_course', lecturer_id=lecturer.id, course_id=c.id) }}"
-                onsubmit="return confirm('Unassign {{ lecturer.full_name }} from {{ c.code }}? The course will have no lecturer until reassigned.');">
+                onsubmit="return confirm('Unassign {{ lecturer.full_name }} from {{ c.code }}? The course will have no lecturer until reassigned.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn secondary" type="submit" style="font-size:.76rem; padding:4px 10px;">Unassign</button>
           </form>
         </td>
@@ -56,7 +56,7 @@
     </tbody>
   </table>
 
-  <form method="post" action="{{ url_for('admin_lecturer_assign_course', lecturer_id=lecturer.id) }}" style="margin-top:16px; display:flex; gap:10px; align-items:center;">
+  <form method="post" action="{{ url_for('admin_lecturer_assign_course', lecturer_id=lecturer.id) }}" style="margin-top:16px; display:flex; gap:10px; align-items:center;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <select name="course_id" style="flex:1; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;" {{ 'disabled' if not available_courses }}>
       {% for c in available_courses %}
       <option value="{{ c.id }}">{{ c.code }} — {{ c.name }}{% if c.lecturer %} (currently: {{ c.lecturer.full_name }}){% endif %}</option>

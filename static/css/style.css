@@ -86,6 +86,8 @@ a:hover{color:var(--brass);}
   background:none;border:none;color:#D8DEEC;cursor:pointer;
   font-size:.82rem;padding:0;text-decoration:underline;
 }
+.sidebar-foot a{color:#D8DEEC; text-decoration:underline; display:inline-block; margin-top:8px;}
+.sidebar-foot a:hover{color:#FFFFFF;}
 
 main{padding:34px 40px; max-width:1180px;}
 .eyebrow{color:var(--ink-soft); font-size:.82rem; margin-bottom:2px;}
@@ -209,6 +211,7 @@ tr:hover td{background:rgba(169,121,60,.06);}
 .flash{padding:10px 14px; border-radius:3px; font-size:.85rem; margin-bottom:16px;}
 .flash.error{background:var(--high-bg); color:var(--high);}
 .flash.success{background:var(--low-bg); color:var(--low);}
+.flash.info{background:var(--medium-bg); color:#6B4E12;}
 
 .subtext{color:var(--ink-soft); font-size:.85rem;}
 .breakdown-row{display:flex; justify-content:space-between; font-size:.87rem; padding:6px 0; border-bottom:1px solid var(--rule);}

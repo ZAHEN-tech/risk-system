@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Add Staff Account' if mode=='new' else 'Edit Staff Account' }}{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('admin_staff_list') }}">← Staff accounts</a></div>
+<div class="page-title">
+  <h1>{{ 'Add staff account' if mode=='new' else 'Edit ' + staff.full_name }}</h1>
+</div>
+
+<div class="panel" style="max-width:480px;">
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field">
+      <label for="full_name">Full name</label>
+      <input type="text" id="full_name" name="full_name" required
+             value="{{ form.get('full_name','') if mode=='new' else staff.full_name }}">
+    </div>
+
+    {% if mode == 'new' %}
+    <div class="field">
+      <label for="role">Role</label>
+      <select id="role" name="role" required style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        <option value="">Choose a role…</option>
+        {% for key, label in roles.items() %}
+        <option value="{{ key }}" {{ 'selected' if form.get('role')==key }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% else %}
+    <p class="subtext">Role: <strong>{{ roles[staff.role] }}</strong> (cannot be changed — create a new account instead).</p>
+    {% endif %}
+
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email"
+             value="{{ form.get('email','') if mode=='new' else (staff.email or '') }}">
+    </div>
+
+    <div class="field">
+      <label for="department_id">Department</label>
+      {% set current_dept = (form.get('department_id','') or 0)|int if mode=='new' else staff.department_id %}
+      <select id="department_id" name="department_id" style="width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;">
+        <option value="">No department</option>
+        {% for d in departments %}
+        <option value="{{ d.id }}" {{ 'selected' if current_dept==d.id }}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="subtext" style="margin-top:6px;">Required for a Head of Department (one active Head per department). Optional for counsellors.</p>
+    </div>
+
+    {% if mode == 'new' %}
+    <div class="field">
+      <label for="password">Initial password</label>
+      <input type="text" id="password" name="password" minlength="8" placeholder="Leave blank for password123" value="{{ form.get('password','') }}">
+      <p class="subtext" style="margin-top:6px;">At least 8 characters. They will be asked to change it at first sign-in.</p>
+    </div>
+    {% endif %}
+
+    <div class="btn-row" style="margin-top:18px;">
+      <button class="btn" type="submit">{{ 'Create account' if mode=='new' else 'Save changes' }}</button>
+      <a class="btn secondary" href="{{ url_for('admin_staff_list') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

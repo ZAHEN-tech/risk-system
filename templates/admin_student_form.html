@@ -9,7 +9,7 @@
 </div>
 
 <div class="panel" style="max-width:560px;">
-  <form method="post">
+  <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field">
       <label for="full_name">Full name</label>
       <input type="text" id="full_name" name="full_name" required
@@ -82,7 +82,7 @@
         <input type="text" id="parent_email" name="parent_email" value="{{ form.get('parent_email','') }}">
       </div>
       <label style="display:flex; align-items:center; gap:6px; font-size:.86rem; color:var(--ink-soft);">
-        <input type="checkbox" name="parent_consent" {{ 'checked' if form.get('parent_consent')=='on' or not form }}>
+        <input type="checkbox" name="parent_consent" {{ 'checked' if form.get('parent_consent')=='on' }}>
         Parent has consented to be notified if this student is flagged High risk
       </label>
     </div>

@@ -20,7 +20,7 @@
       {% endif %}
     {% endwith %}
 
-    <form method="post">
+    <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label for="username">Username</label>
         <input type="text" id="username" name="username" autofocus required>
@@ -32,12 +32,14 @@
       <button class="btn" type="submit" style="width:100%">Sign in</button>
     </form>
 
+    {% if demo_accounts %}
     <div class="demo-accounts">
       <p>Demo accounts (password: password123)</p>
       {% for username, label in demo_accounts %}
         <span class="demo-chip">{{ username }} — {{ label }}</span>
       {% endfor %}
     </div>
+    {% endif %}
   </div>
 </div>
 </body>

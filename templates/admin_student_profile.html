@@ -7,7 +7,7 @@
   <h1>{{ student.user.full_name }}</h1>
   <div class="btn-row">
     <a class="btn secondary" href="{{ url_for('admin_student_edit', student_id=student.id) }}">Edit details</a>
-    <form method="post" action="{{ url_for('admin_student_toggle_active', student_id=student.id) }}">
+    <form method="post" action="{{ url_for('admin_student_toggle_active', student_id=student.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn secondary" type="submit">{{ 'Deactivate account' if student.user.active else 'Reactivate account' }}</button>
     </form>
   </div>
@@ -29,7 +29,7 @@
   <h3>Account access</h3>
   <form method="post" action="{{ url_for('admin_student_reset_password', student_id=student.id) }}"
         style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;"
-        onsubmit="return confirm('Update this student\'s login password?');">
+        onsubmit="return confirm('Update this student\'s login password?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field" style="margin-bottom:0; min-width:220px;">
       <label for="new_password">Set a new password</label>
       <input type="text" id="new_password" name="new_password" placeholder="Leave blank to reset to password123">
@@ -44,7 +44,7 @@
 <div class="panel">
   <h3>Course enrollments &amp; risk</h3>
   {{ risk_table(rows, show_student=False, show_ml=True) }}
-  <form method="post" action="{{ url_for('admin_student_enroll', student_id=student.id) }}" style="margin-top:16px; display:flex; gap:10px; align-items:center;">
+  <form method="post" action="{{ url_for('admin_student_enroll', student_id=student.id) }}" style="margin-top:16px; display:flex; gap:10px; align-items:center;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <select name="course_id" style="flex:1; padding:9px 11px; border:1px solid var(--rule); border-radius:3px;" {{ 'disabled' if not available_courses }}>
       {% for c in available_courses %}
       <option value="{{ c.id }}">{{ c.code }} — {{ c.name }}</option>
@@ -58,7 +58,7 @@
   <div style="margin-top:10px;">
     {% for r in rows %}
     <form method="post" action="{{ url_for('admin_student_unenroll', student_id=student.id, enrollment_id=r.enrollment.id) }}"
-          style="display:inline;" onsubmit="return confirm('Unenroll from {{ r.course.code }}? This removes its attendance and assessment records.');">
+          style="display:inline;" onsubmit="return confirm('Unenroll from {{ r.course.code }}? This removes its attendance and assessment records.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn secondary" type="submit" style="font-size:.76rem; padding:4px 10px; margin:2px;">Unenroll {{ r.course.code }}</button>
     </form>
     {% endfor %}

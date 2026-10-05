@@ -3,7 +3,7 @@ Prepares small, chart-ready data structures for the dashboard graphs.
 Kept separate from risk_engine.py because this is purely presentational
 aggregation (for Chart.js), not part of the risk-scoring logic itself.
 """
-from models import AttendanceRecord, Assessment, Enrollment
+from models import AttendanceRecord, Assessment, AssessmentDefinition, Enrollment
 
 
 def band_counts(risk_scores):
@@ -63,7 +63,8 @@ def student_score_series(enrollment_id):
     rows = (
         Assessment.query.filter_by(enrollment_id=enrollment_id, submitted=True)
         .filter(Assessment.score.isnot(None))
-        .order_by(Assessment.sequence).all()
+        .join(AssessmentDefinition, Assessment.definition_id == AssessmentDefinition.id)
+        .order_by(AssessmentDefinition.sequence).all()
     )
     labels = [a.title for a in rows]
     values = [round(100.0 * a.score / a.max_score, 1) if a.max_score else 0 for a in rows]

@@ -66,7 +66,7 @@
   <h3>Retrain</h3>
   <p class="subtext">Regenerates the synthetic historical dataset and retrains, then re-scores every
     current enrollment with the new model.</p>
-  <form method="post" action="{{ url_for('admin_model_train') }}" class="btn-row" style="align-items:center;">
+  <form method="post" action="{{ url_for('admin_model_train') }}" class="btn-row" style="align-items:center;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="text" name="n" value="3000" style="width:120px;">
     <button class="btn" type="submit">Retrain model</button>
   </form>

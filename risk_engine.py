@@ -31,7 +31,7 @@ on its own. See risk_engine.model_agreement_summary() and the admin
 """
 from datetime import datetime
 from models import (
-    db, Enrollment, AttendanceRecord, Assessment, RiskScore,
+    db, Enrollment, AttendanceRecord, Assessment, AssessmentDefinition, RiskScore,
     Notification, Student, Course, Department, User
 )
 import ml_engine
@@ -59,7 +59,11 @@ def _attendance_pct(enrollment_id):
 
 
 def _assessment_stats(enrollment_id):
-    assessments = Assessment.query.filter_by(enrollment_id=enrollment_id).order_by(Assessment.sequence).all()
+    assessments = (
+        Assessment.query.filter_by(enrollment_id=enrollment_id)
+        .join(AssessmentDefinition, Assessment.definition_id == AssessmentDefinition.id)
+        .order_by(AssessmentDefinition.sequence).all()
+    )
     if not assessments:
         return 100.0, 100.0, 0.0
 

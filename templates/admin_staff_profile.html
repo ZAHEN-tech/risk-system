@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ staff.full_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('admin_staff_list') }}">← Staff accounts</a></div>
+<div class="page-title">
+  <h1>{{ staff.full_name }}</h1>
+  <div class="btn-row">
+    <a class="btn secondary" href="{{ url_for('admin_staff_edit', user_id=staff.id) }}">Edit details</a>
+    <form method="post" action="{{ url_for('admin_staff_toggle_active', user_id=staff.id) }}"
+          onsubmit="return confirm('{{ 'Deactivate' if staff.active else 'Reactivate' }} this account?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn secondary" type="submit">{{ 'Deactivate account' if staff.active else 'Reactivate account' }}</button>
+    </form>
+  </div>
+</div>
+
+<p class="subtext">
+  {{ roles[staff.role] }}
+  · {{ staff.department.name if staff.department else 'No department' }}
+  · Login: <strong>{{ staff.username }}</strong>
+  · Status: {% if staff.active %}Active{% else %}<strong style="color:var(--high)">Deactivated</strong>{% endif %}
+  {% if staff.email %} · {{ staff.email }}{% endif %}
+</p>
+
+<div class="panel">
+  <h3>Account access</h3>
+  <form method="post" action="{{ url_for('admin_staff_reset_password', user_id=staff.id) }}"
+        style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;"
+        onsubmit="return confirm('Update this login password?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field" style="margin-bottom:0; min-width:220px;">
+      <label for="new_password">Set a new password</label>
+      <input type="text" id="new_password" name="new_password" placeholder="Leave blank to reset to password123">
+    </div>
+    <button class="btn secondary" type="submit">Update password</button>
+  </form>
+  <p class="subtext" style="margin-top:8px;">At least 8 characters, or leave blank to reset to the default. The user
+    will be asked to choose their own password at next sign-in.</p>
+</div>
+
+{% if staff.role == 'counsellor' %}
+<div class="panel">
+  <h3>Caseload ({{ caseload|length }} students)</h3>
+  <table>
+    <thead><tr><th>Student</th><th>Department</th><th>Worst course risk</th></tr></thead>
+    <tbody>
+      {% for s in caseload %}
+      {% set w = worst(s) %}
+      <tr>
+        <td><a href="{{ url_for('admin_student_profile', student_id=s.id) }}">{{ s.user.full_name }}</a>
+          <div class="subtext">{{ s.student_number }}</div></td>
+        <td>{{ s.department.name }}</td>
+        <td>{% if w %}<span class="badge {{ w.risk_band|band_class }}">{{ w.risk_band }}</span>{% else %}—{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="subtext">No students assigned. Assign a counsellor from a student's Edit page.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="panel">
+  <h3>Department responsibility</h3>
+  <p>{{ staff.full_name }} receives Medium and High risk alerts for every course in
+    <strong>{{ staff.department.name if staff.department else 'no department (alerts will not reach them)' }}</strong>
+    and sees that department's dashboard and reports.</p>
+</div>
+{% endif %}
+{% endblock %}

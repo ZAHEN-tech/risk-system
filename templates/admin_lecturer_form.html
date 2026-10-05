@@ -7,7 +7,7 @@
 </div>
 
 <div class="panel" style="max-width:480px;">
-  <form method="post">
+  <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field">
       <label for="full_name">Full name</label>
       <input type="text" id="full_name" name="full_name" required

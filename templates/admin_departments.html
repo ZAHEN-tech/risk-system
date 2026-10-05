@@ -6,7 +6,7 @@
 
 <div class="panel" style="max-width:480px;">
   <h3>Add a department</h3>
-  <form method="post" style="display:flex; gap:10px; align-items:flex-end;">
+  <form method="post" style="display:flex; gap:10px; align-items:flex-end;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field" style="flex:1; margin-bottom:0;">
       <label for="name">Department name</label>
       <input type="text" id="name" name="name" required placeholder="e.g. School of Nursing">
