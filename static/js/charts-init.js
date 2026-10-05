@@ -50,10 +50,42 @@
     }
   };
 
+  // Line charts draw themselves from left to right: the plot area is clipped
+  // to a window that widens over 1.2 s. Works with the gradient fill.
+  var lineReveal = {
+    id: 'lineReveal',
+    beforeDatasetsDraw: function (chart) {
+      var p = chart.$reveal;
+      if (p === undefined || p >= 1) return;
+      var a = chart.chartArea, ctx = chart.ctx;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(a.left - 6, a.top - 10, (a.right - a.left + 12) * p, a.bottom - a.top + 20);
+      ctx.clip();
+    },
+    afterDatasetsDraw: function (chart) {
+      if (chart.$reveal !== undefined && chart.$reveal < 1) chart.ctx.restore();
+    }
+  };
+  function startReveal(chart) {
+    if (reduceMotion) return;
+    var start = null, dur = 1200;
+    chart.$reveal = 0;
+    function step(ts) {
+      if (start === null) start = ts;
+      var p = Math.min(1, (ts - start) / dur);
+      chart.$reveal = 1 - Math.pow(1 - p, 3);
+      chart.draw();
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  var animate = !reduceMotion;   // switched off for theme redraws
   function baseOptions(t, legend) {
     return {
       responsive: true, maintainAspectRatio: false,
-      animation: reduceMotion ? false : { duration: 900, easing: 'easeOutQuart' },
+      animation: animate ? { duration: 900, easing: 'easeOutQuart' } : false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: legend ? { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 16, color: t.soft, font: { family: t.font, size: 12 } } } : { display: false },
@@ -88,7 +120,10 @@
       return new Chart(canvas, {
         type: 'doughnut', plugins: [centreTotal],
         data: { labels: labels, datasets: [{ data: values, backgroundColor: colors, borderColor: t.surface, borderWidth: 3, hoverOffset: 6, borderRadius: 4 }] },
-        options: Object.assign(baseOptions(t, true), { cutout: '70%', interaction: { mode: 'nearest' } })
+        options: Object.assign(baseOptions(t, true), {
+          cutout: '70%', interaction: { mode: 'nearest' },
+          animation: animate ? { animateRotate: true, animateScale: true, duration: 1100, easing: 'easeOutCubic' } : false
+        })
       });
     }
     if (kind === 'bar' || kind === 'multibar') {
@@ -97,6 +132,15 @@
         : JSON.parse(canvas.dataset.series || '[]');
       var opts = baseOptions(t, kind === 'multibar');
       opts.scales = axes(t);
+      if (opts.animation) {
+        // Bars rise one after another, grouped bars a beat apart.
+        opts.animation = {
+          duration: 700, easing: 'easeOutBack',
+          delay: function (ctx) {
+            return ctx.type === 'data' && ctx.mode === 'default' ? ctx.dataIndex * 90 + ctx.datasetIndex * 45 : 0;
+          }
+        };
+      }
       return new Chart(canvas, {
         type: 'bar',
         data: {
@@ -115,8 +159,9 @@
       var maxY = canvas.dataset.max ? parseFloat(canvas.dataset.max) : 100;
       var opts2 = baseOptions(t, false);
       opts2.scales = axes(t, maxY);
-      return new Chart(canvas, {
-        type: 'line',
+      opts2.animation = false;   // the reveal below is the animation
+      var line = new Chart(canvas, {
+        type: 'line', plugins: [lineReveal],
         data: {
           labels: labels,
           datasets: [{
@@ -134,28 +179,55 @@
         },
         options: opts2
       });
+      if (animate) startReveal(line);
+      return line;
     }
     return null;
   }
 
-  function drawAll() {
-    charts.forEach(function (ch) { ch.destroy(); });
+  // Each chart is drawn (and so animates) the first time it scrolls into view.
+  var observer = null;
+  function drawOne(canvas) {
+    if (canvas.$chart) canvas.$chart.destroy();
+    var ch = draw(canvas);
+    canvas.$chart = ch;
+    if (ch) charts.push(ch);
+  }
+  function setup() {
+    var canvases = Array.prototype.slice.call(document.querySelectorAll('canvas[data-kind]'));
+    if (!('IntersectionObserver' in window) || reduceMotion) {
+      canvases.forEach(drawOne);
+      return;
+    }
+    observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        observer.unobserve(e.target);
+        e.target.$seen = true;
+        drawOne(e.target);
+      });
+    }, { threshold: 0.25 });
+    canvases.forEach(function (c) { observer.observe(c); });
+  }
+  function redrawSeen() {
+    // Theme change: recolour charts already shown, without replaying the animation.
+    animate = false;
     charts = [];
-    document.querySelectorAll('canvas[data-kind]').forEach(function (canvas) {
-      var ch = draw(canvas);
-      if (ch) charts.push(ch);
+    document.querySelectorAll('canvas[data-kind]').forEach(function (c) {
+      if (c.$seen || !observer) drawOne(c);
     });
+    animate = !reduceMotion;
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     if (window.Chart) {
       Chart.defaults.font.family = theme().font;
-      drawAll();
+      setup();
     }
   });
   document.addEventListener('ua:themechange', function () {
     if (!window.Chart) return;
     Chart.defaults.font.family = theme().font;
-    drawAll();
+    redrawSeen();
   });
 })();

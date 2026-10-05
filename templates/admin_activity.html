@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Activity log{% endblock %}
+{% block content %}
+<div class="eyebrow">Administrator</div>
+<div class="page-title">
+  <h1>Activity log</h1>
+  <p class="subtext">Who did what, and when. Passwords are never recorded.</p>
+</div>
+
+<div class="panel">
+  <form method="get" class="filter-bar">
+    <div class="field">
+      <label for="who">Person</label>
+      <input type="text" id="who" name="who" value="{{ who }}" placeholder="Name or username">
+    </div>
+    <div class="field">
+      <label for="action">Activity</label>
+      <select id="action" name="action">
+        <option value="">Everything</option>
+        <option value="login.*" {{ 'selected' if action=='login.*' }}>Sign-ins (all)</option>
+        <option value="account.*" {{ 'selected' if action=='account.*' }}>Account changes (all)</option>
+        <option value="enrolment.*" {{ 'selected' if action=='enrolment.*' }}>Enrolment changes (all)</option>
+        {% for key, label in labels.items() %}
+        <option value="{{ key }}" {{ 'selected' if action==key }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="btn secondary" type="submit">Filter</button>
+    {% if who or action %}<a class="btn ghost" href="{{ url_for('admin_activity') }}">Clear</a>{% endif %}
+  </form>
+
+  <table>
+    <thead><tr><th>When</th><th>Person</th><th>Activity</th><th>Details</th></tr></thead>
+    <tbody>
+    {% for e in entries %}
+      <tr>
+        <td style="white-space:nowrap;">{{ (e.created_at + offset).strftime('%d %b %Y, %H:%M') }}</td>
+        <td>{% if e.user %}{{ e.user.full_name }}<div class="subtext">{{ e.user.username }} · {{ role_labels.get(e.user.role, e.user.role) }}</div>{% else %}<span class="subtext">System</span>{% endif %}</td>
+        <td><span class="pill">{{ labels.get(e.action, e.action) }}</span></td>
+        <td>{{ e.detail or '' }}{% if e.ip_address %}<div class="subtext">{{ e.ip_address }}</div>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="subtext">Nothing recorded yet{% if who or action %} for these filters{% endif %}.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {% if pagination.pages > 1 %}
+  {% set args = request.args.to_dict() %}
+  <div class="pager">
+    <span class="subtext">{{ pagination.total }} entries</span>
+    <div class="btn-row">
+      {% if pagination.has_prev %}{% set _ = args.update({'page': pagination.prev_num}) %}<a class="btn secondary small" href="{{ url_for('admin_activity', **args) }}">← Newer</a>{% endif %}
+      <span class="subtext">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+      {% if pagination.has_next %}{% set _ = args.update({'page': pagination.next_num}) %}<a class="btn secondary small" href="{{ url_for('admin_activity', **args) }}">Older →</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

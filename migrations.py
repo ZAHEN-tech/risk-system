@@ -28,6 +28,10 @@ Changes applied:
      recent one first. If duplicate courses or enrolments exist they are NOT
      merged automatically - that rule is skipped and a warning is printed so a
      person can decide.
+  5. enrollment: add status ('active' / 'withdrawn'), withdrawn_at,
+     withdrawn_reason, withdrawn_by_id, so a lecturer can withdraw a student
+     from a course without deleting their attendance and marks.
+  6. New tables (for example activity_log) are created if missing.
 """
 from datetime import datetime
 from sqlalchemy import inspect, text
@@ -72,6 +76,13 @@ def run_migrations(db):
             # one migrates, the others wait, then find nothing left to do.
             conn.execute(text("SELECT pg_advisory_xact_lock(724501)"))
         tables = set(inspect(conn).get_table_names())
+
+        # ---- 6. new tables (created first; create_all never alters existing ones)
+        missing = [t for t in db.metadata.sorted_tables if t.name not in tables]
+        if missing and "user" in tables:
+            db.metadata.create_all(conn, tables=missing)
+            _log("created table(s): " + ", ".join(t.name for t in missing))
+            tables = set(inspect(conn).get_table_names())
 
         # ---- 1. user security columns ---------------------------------------
         if "user" in tables:
@@ -168,3 +179,23 @@ def run_migrations(db):
                 continue
             conn.execute(text(f"CREATE UNIQUE INDEX {name} ON {table} ({col_list})"))
             _log(f"added unique rule {name}")
+
+        # ---- 5. enrolment status (withdraw without deleting history) -----------
+        if "enrollment" in tables:
+            cols = _columns(conn, "enrollment")
+            ts = "TIMESTAMP" if dialect == "postgresql" else "DATETIME"
+            added = []
+            if "status" not in cols:
+                conn.execute(text("ALTER TABLE enrollment ADD COLUMN status VARCHAR(12) NOT NULL DEFAULT 'active'"))
+                added.append("status")
+            if "withdrawn_at" not in cols:
+                conn.execute(text(f"ALTER TABLE enrollment ADD COLUMN withdrawn_at {ts}"))
+                added.append("withdrawn_at")
+            if "withdrawn_reason" not in cols:
+                conn.execute(text("ALTER TABLE enrollment ADD COLUMN withdrawn_reason VARCHAR(200)"))
+                added.append("withdrawn_reason")
+            if "withdrawn_by_id" not in cols:
+                conn.execute(text('ALTER TABLE enrollment ADD COLUMN withdrawn_by_id INTEGER REFERENCES "user"(id)'))
+                added.append("withdrawn_by_id")
+            if added:
+                _log("enrollment: added " + ", ".join(added))

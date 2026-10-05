@@ -31,6 +31,7 @@
         <td>{{ c.code }}<div class="subtext">{{ c.name }}</div></td>
         <td>{{ c.enrollments|length }} students</td>
         <td><div class="btn-row" style="justify-content:flex-end;">
+          <a class="btn secondary small" href="{{ url_for('lecturer_roster', course_id=c.id) }}">Roster</a>
           <a class="btn secondary small" href="{{ url_for('lecturer_attendance', course_id=c.id) }}">Attendance</a>
           <a class="btn secondary small" href="{{ url_for('lecturer_assessments', course_id=c.id) }}">Assessments</a>
         </div></td>

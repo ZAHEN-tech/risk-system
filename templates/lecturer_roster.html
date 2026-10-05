@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Roster — {{ course.code }}{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('lecturer_dashboard') }}">← Your courses</a></div>
+<div class="page-title">
+  <h1>Roster — {{ course.code }} {{ course.name }}</h1>
+  <p class="subtext">{{ active|length }} active student{{ '' if active|length == 1 else 's' }}{% if withdrawn %} · {{ withdrawn|length }} withdrawn{% endif %}</p>
+</div>
+
+<div class="grid-2">
+  <div class="panel">
+    <h3>Add students</h3>
+    <p class="subtext">Enter one or more student numbers, separated by commas or new lines. Students must already have a record; an administrator creates new student records.</p>
+    <form method="post" action="{{ url_for('lecturer_roster_add', course_id=course.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="student_numbers">Student numbers</label>
+        <textarea id="student_numbers" name="student_numbers" rows="3" placeholder="S2026001, S2026002" required></textarea>
+      </div>
+      <button class="btn" type="submit">Add to {{ course.code }}</button>
+    </form>
+  </div>
+  <div class="panel">
+    <h3>How withdrawing works</h3>
+    <ul class="plain-list">
+      <li>Use it when a student never turns up, drops the course or transfers.</li>
+      <li>The student leaves your attendance sheet, marks entry, alerts and reports for this course.</li>
+      <li>Their attendance and marks are kept, and you can restore them at any time.</li>
+      <li>The administrator still sees every enrolment and can make permanent changes.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Active students</h3>
+  <table class="stack-mobile">
+    <thead><tr><th>Student</th><th>Risk</th><th>Withdraw</th></tr></thead>
+    <tbody>
+    {% for e in active %}
+      {% set r = rows[e.id] %}
+      <tr>
+        <td>{{ e.student.user.full_name }}<div class="subtext">{{ e.student.student_number }}</div></td>
+        <td>{% if r.risk %}<span class="badge {{ r.risk.risk_band|band_class }}">{{ r.risk.risk_band }} · {{ r.risk.risk_score }}</span>{% else %}<span class="badge risk-unknown">Not scored</span>{% endif %}</td>
+        <td>
+          <form method="post" action="{{ url_for('lecturer_roster_withdraw', course_id=course.id, enrollment_id=e.id) }}" class="inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="reason" aria-label="Reason for withdrawing {{ e.student.user.full_name }}">
+              {% for reason in reasons %}<option>{{ reason }}</option>{% endfor %}
+            </select>
+            <input type="text" name="note" maxlength="120" placeholder="Note (optional)" aria-label="Note">
+            <button class="btn danger small" type="submit">Withdraw</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3" class="subtext">No students on this course yet. Add them above.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if withdrawn %}
+<div class="panel">
+  <h3>Withdrawn</h3>
+  <table class="stack-mobile">
+    <thead><tr><th>Student</th><th>Reason</th><th>When</th><th></th></tr></thead>
+    <tbody>
+    {% for e in withdrawn %}
+      <tr>
+        <td>{{ e.student.user.full_name }}<div class="subtext">{{ e.student.student_number }}</div></td>
+        <td>{{ e.withdrawn_reason or '—' }}{% if e.withdrawn_by %}<div class="subtext">by {{ e.withdrawn_by.full_name }}</div>{% endif %}</td>
+        <td>{{ e.withdrawn_at.strftime('%d %b %Y') if e.withdrawn_at else '—' }}</td>
+        <td style="text-align:right;">
+          <form method="post" action="{{ url_for('lecturer_roster_restore', course_id=course.id, enrollment_id=e.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn secondary small" type="submit">Restore</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

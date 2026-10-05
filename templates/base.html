@@ -38,6 +38,7 @@
         <a class="nav-item {{ 'active' if ep.startswith('admin_staff') }}" href="{{ url_for('admin_staff_list') }}">{{ icon('staff') }}<span>Heads &amp; counsellors</span></a>
         <div class="nav-group">Insight</div>
         <a class="nav-item {{ 'active' if ep.startswith('admin_model') }}" href="{{ url_for('admin_model') }}">{{ icon('model') }}<span>Predictive model</span></a>
+        <a class="nav-item {{ 'active' if ep=='admin_activity' }}" href="{{ url_for('admin_activity') }}">{{ icon('shield') }}<span>Activity log</span></a>
         {% endif %}
         {% set reports_route = {'admin':'admin_reports','hod':'hod_reports','lecturer':'lecturer_reports','counsellor':'counsellor_reports'}.get(current_user.role) %}
         {% if reports_route %}

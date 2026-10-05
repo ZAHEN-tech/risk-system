@@ -220,7 +220,7 @@ def generate_notifications_for_enrollment(enrollment: Enrollment, rs: RiskScore,
 
 def recompute_all():
     """Recompute risk for every enrollment and generate any new notifications. Returns a summary dict."""
-    enrollments = Enrollment.query.all()
+    enrollments = Enrollment.query.filter_by(status="active").all()
     summary = {"total": 0, "high": 0, "medium": 0, "low": 0, "notifications": 0}
     for e in enrollments:
         rs, prev_band = compute_risk_for_enrollment(e.id)

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Import students{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('admin_students_list') }}">← Students</a></div>
+<div class="page-title">
+  <h1>Import students from a CSV file</h1>
+</div>
+
+{% if done %}
+<div class="panel credentials-panel">
+  <h3>Imported {{ imported }} student{{ '' if imported == 1 else 's' }}</h3>
+  <p>{{ enrolments }} course enrolment{{ '' if enrolments == 1 else 's' }} created and risk scored.
+    {{ accounts }} sign-in account{{ '' if accounts == 1 else 's' }} made (students and parents).</p>
+  <p><strong>Download the sign-in details now.</strong> This is the only time the temporary passwords are shown.
+    They are not stored anywhere. Everyone must choose their own password at first sign-in.</p>
+  <div class="btn-row" style="margin:14px 0;">
+    <a class="btn" href="{{ credentials_uri }}" download="{{ credentials_filename }}">Download sign-in details (CSV)</a>
+    <a class="btn secondary" href="{{ url_for('admin_students_list') }}">Go to students</a>
+  </div>
+  <table>
+    <thead><tr><th>Name</th><th>Student no.</th><th>Account</th><th>Username</th><th>Temporary password</th></tr></thead>
+    <tbody>
+    {% for c in credentials %}
+      <tr><td>{{ c[0] }}</td><td>{{ c[1] }}</td><td>{{ c[2] }}</td><td><code>{{ c[3] }}</code></td><td><code>{{ c[4] }}</code></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if accounts > credentials|length %}<p class="subtext" style="margin-top:8px;">Showing the first {{ credentials|length }} of {{ accounts }}. The download has them all.</p>{% endif %}
+</div>
+{% else %}
+
+{% if file_errors %}
+<div class="flash error" role="alert">
+  <strong>The file could not be read.</strong>
+  <ul class="error-list">{% for e in file_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if row_errors %}
+<div class="flash error" role="alert">
+  <strong>Nothing was imported.</strong> {{ row_errors|length }} of {{ checked }} row{{ '' if checked == 1 else 's' }} need fixing. Correct them in the file and upload it again.
+  <ul class="error-list">
+    {% for e in row_errors[:50] %}<li>Line {{ e.line }} ({{ e.who }}): {{ e.problems|join('; ') }}.</li>{% endfor %}
+    {% if row_errors|length > 50 %}<li>…and {{ row_errors|length - 50 }} more.</li>{% endif %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="grid-2">
+  <div class="panel">
+    <h3>Upload</h3>
+    <form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="file">CSV file</label>
+        <input type="file" id="file" name="file" accept=".csv,text/csv" required>
+      </div>
+      <button class="btn" type="submit">Check and import</button>
+    </form>
+    <p class="subtext" style="margin-top:12px;">Every row is checked first. If any row has a problem, nothing is imported and you get a list of what to fix. Up to {{ max_rows }} students per file.</p>
+  </div>
+  <div class="panel">
+    <h3>Preparing the file</h3>
+    <ol class="plain-list">
+      <li><a href="{{ url_for('admin_students_import_template') }}">Download the template</a> and open it in Excel or Google Sheets.</li>
+      <li>One student per row. Keep the headings in the first row.</li>
+      <li>Save as <strong>CSV UTF-8</strong>.</li>
+    </ol>
+    <p class="subtext" style="margin-top:10px;">Departments: {% for d in departments %}{{ d.name }}{{ ', ' if not loop.last }}{% else %}none yet. Create one first.{% endfor %}</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Columns</h3>
+  <table>
+    <thead><tr><th>Column</th><th>Required</th><th>What to enter</th></tr></thead>
+    <tbody>
+      <tr><td><code>full_name</code></td><td>Yes</td><td>The student's full name. Their username is made from it.</td></tr>
+      <tr><td><code>student_number</code></td><td>Yes</td><td>Must be new: not already used and not repeated in the file.</td></tr>
+      <tr><td><code>department</code></td><td>Yes</td><td>The department name exactly as it appears in {{ APP_NAME }}.</td></tr>
+      <tr><td><code>year_of_study</code></td><td>No</td><td>1 to 8. Blank means 1.</td></tr>
+      <tr><td><code>email</code></td><td>No</td><td>The student's email address.</td></tr>
+      <tr><td><code>course_codes</code></td><td>No</td><td>Course codes separated by semicolons, for example <code>CS101;CS102</code>.</td></tr>
+      <tr><td><code>counsellor_username</code></td><td>No</td><td>Username of an active counsellor.</td></tr>
+      <tr><td><code>parent_name</code>, <code>parent_email</code></td><td>No</td><td>Creates a parent or guardian account linked to the student.</td></tr>
+      <tr><td><code>parent_consent</code></td><td>No</td><td><code>yes</code> or <code>no</code>. Blank means no. Parents are alerted about High risk only with consent.</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

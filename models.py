@@ -61,7 +61,12 @@ class Course(db.Model):
     lecturer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
 
     lecturer = db.relationship("User", foreign_keys=[lecturer_id])
-    enrollments = db.relationship("Enrollment", backref="course", lazy=True)
+    # Every enrolment, including withdrawn ones (history, admin view).
+    all_enrollments = db.relationship("Enrollment", back_populates="course", lazy=True)
+    # Active enrolments only: what dashboards, attendance, marks and risk use.
+    enrollments = db.relationship(
+        "Enrollment", lazy=True, viewonly=True,
+        primaryjoin="and_(Course.id == Enrollment.course_id, Enrollment.status == 'active')")
 
 
 class Student(db.Model):
@@ -78,7 +83,10 @@ class Student(db.Model):
     department = db.relationship("Department", foreign_keys=[department_id])
     counsellor = db.relationship("User", foreign_keys=[counsellor_id])
     parent = db.relationship("User", foreign_keys=[parent_id])
-    enrollments = db.relationship("Enrollment", backref="student", lazy=True)
+    all_enrollments = db.relationship("Enrollment", back_populates="student", lazy=True)
+    enrollments = db.relationship(
+        "Enrollment", lazy=True, viewonly=True,
+        primaryjoin="and_(Student.id == Enrollment.student_id, Enrollment.status == 'active')")
 
 
 class Enrollment(db.Model):
@@ -86,6 +94,20 @@ class Enrollment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey("student.id"), nullable=False, index=True)
     course_id = db.Column(db.Integer, db.ForeignKey("course.id"), nullable=False, index=True)
+    # 'active' or 'withdrawn'. Withdrawn enrolments keep their attendance and
+    # marks but are left out of risk scoring, alerts, dashboards and reports.
+    status = db.Column(db.String(12), nullable=False, default="active", server_default="active", index=True)
+    withdrawn_at = db.Column(db.DateTime, nullable=True)
+    withdrawn_reason = db.Column(db.String(200), nullable=True)
+    withdrawn_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+    course = db.relationship("Course", back_populates="all_enrollments")
+    student = db.relationship("Student", back_populates="all_enrollments")
+    withdrawn_by = db.relationship("User", foreign_keys=[withdrawn_by_id])
+
+    @property
+    def is_active(self):
+        return self.status == "active"
 
     attendance_records = db.relationship("AttendanceRecord", backref="enrollment", lazy=True)
     assessments = db.relationship("Assessment", backref="enrollment", lazy=True)
@@ -169,6 +191,19 @@ class Notification(db.Model):
     recipient = db.relationship("User", foreign_keys=[recipient_id])
     student = db.relationship("Student", foreign_keys=[student_id])
     course = db.relationship("Course", foreign_keys=[course_id])
+
+
+class ActivityLog(db.Model):
+    """Who did what, and when: sign-ins, password and account changes,
+    enrolment changes, imports, and attendance or marks saved."""
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
+    action = db.Column(db.String(40), nullable=False, index=True)
+    detail = db.Column(db.String(300))
+    ip_address = db.Column(db.String(64))
+
+    user = db.relationship("User", foreign_keys=[user_id])
 
 
 class InterventionNote(db.Model):

@@ -23,6 +23,18 @@ assessment entry, dashboards, reports). Current status:
 | 7. Dashboard (totals shown; graphs) | ✅ Done |
 | 8. Reports Module (exportable reports) | ✅ Done |
 
+## Recent changes: roster, import and logging (after Milestone 5)
+
+- **Animated charts.** Line charts draw left to right, bars rise one after another and doughnuts sweep round. Each chart animates the first time it scrolls into view. Animation is switched off for people who ask their device for reduced motion.
+- **Lecturer course rosters** (Dashboard, then Roster on a course). Lecturers add existing students by student number, withdraw a student with a reason, and restore them. A withdrawn student keeps their attendance and marks but leaves the attendance sheet, marks entry, risk scoring, alerts, dashboards and reports for that course. Administrators keep full student management, see withdrawn enrolments on the student profile, and are the only ones who can permanently delete records.
+- **Bulk CSV import** for administrators (Students, then Import from CSV). Every row is checked first; if any row is wrong nothing is imported. Temporary passwords are generated and offered once as a CSV download.
+- **Activity log** for administrators: sign-ins, failed sign-ins, lockouts, password changes and resets, account changes, enrolment changes, imports, attendance and marks saves. Passwords are never logged.
+- **Student list paging** (50 per page) with the risk-band filter done in the database.
+- **Friendly error pages** for 403, 404, 413 and 500.
+- **Demo tools hidden in production.** "Seed demo dataset" and "Reset database" only appear when no `DATABASE_URL` is set, unless `ALLOW_DEMO_TOOLS=true`.
+- **Automated tests:** `pip install -r requirements-dev.txt`, then `python -m pytest`. Set `TEST_DATABASE_URL` to an empty PostgreSQL database to run them against PostgreSQL.
+- **Database changes** are applied automatically on start: new `enrollment.status`, `withdrawn_at`, `withdrawn_reason`, `withdrawn_by_id` columns (existing enrolments become `active`) and a new `activity_log` table. Risk scores are unchanged.
+
 ## Recent changes (October 2026)
 
 - **Staff accounts screen** (`/admin/staff`): admins can create, edit, deactivate and reset passwords for

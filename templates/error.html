@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-theme="{{ default_theme }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} · {{ APP_NAME }}</title>
+<script>try { var t = localStorage.getItem('ua-theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+{% from "_ui.html" import logo %}
+<main class="error-page">
+  <div style="margin-bottom:18px;">{{ logo(48) }}</div>
+  <div class="code">{{ code }}</div>
+  <h1>{{ title }}</h1>
+  <p>{{ message }}</p>
+  <div class="btn-row" style="justify-content:center;">
+    <a class="btn" href="{{ url_for('index') }}">{{ 'Back to your dashboard' if current_user.is_authenticated else 'Go to sign in' }}</a>
+    <a class="btn secondary" href="javascript:history.back()">Go back</a>
+  </div>
+</main>
+</body>
+</html>

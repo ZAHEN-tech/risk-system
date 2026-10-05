@@ -4,7 +4,10 @@
 <div class="eyebrow">Administrator</div>
 <div class="page-title">
   <h1>Student management</h1>
-  <a class="btn" href="{{ url_for('admin_student_new') }}">+ Register student</a>
+  <div class="btn-row">
+    <a class="btn secondary" href="{{ url_for('admin_students_import') }}">Import from CSV</a>
+    <a class="btn" href="{{ url_for('admin_student_new') }}">+ Register student</a>
+  </div>
 </div>
 
 <div class="panel">
@@ -65,5 +68,18 @@
       {% endfor %}
     </tbody>
   </table>
+  {% if pagination.total %}
+  {% set args = request.args.to_dict() %}
+  <div class="pager">
+    <span class="subtext">Showing {{ (pagination.page - 1) * pagination.per_page + 1 }}–{{ (pagination.page - 1) * pagination.per_page + rows|length }} of {{ pagination.total }}</span>
+    {% if pagination.pages > 1 %}
+    <div class="btn-row">
+      {% if pagination.has_prev %}{% set _ = args.update({'page': pagination.prev_num}) %}<a class="btn secondary small" href="{{ url_for('admin_students_list', **args) }}">← Previous</a>{% endif %}
+      <span class="subtext">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+      {% if pagination.has_next %}{% set _ = args.update({'page': pagination.next_num}) %}<a class="btn secondary small" href="{{ url_for('admin_students_list', **args) }}">Next →</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -35,20 +35,26 @@
     <span><strong>Lecturers</strong><span class="subtext">Teaching staff and the courses assigned to them.</span></span></a>
   <a class="action-card" href="{{ url_for('admin_staff_list') }}"><span class="icon-wrap">{{ icon('staff', 20) }}</span>
     <span><strong>Heads &amp; counsellors</strong><span class="subtext">Heads of Department and Student Services counsellors.</span></span></a>
+  <a class="action-card" href="{{ url_for('admin_activity') }}"><span class="icon-wrap">{{ icon('shield', 20) }}</span>
+    <span><strong>Activity log</strong><span class="subtext">Sign-ins, password resets and changes to records.</span></span></a>
   <a class="action-card" href="{{ url_for('admin_reports') }}"><span class="icon-wrap">{{ icon('reports', 20) }}</span>
     <span><strong>Reports</strong><span class="subtext">Download performance, risk and attendance reports.</span></span></a>
 </div>
 
 <div class="panel">
   <h3>Data pipeline</h3>
-  <p class="subtext">Attendance, coursework and assessment data normally flow in from the student information
-    system and LMS on a schedule (e.g. nightly). In this prototype you can seed a synthetic dataset and trigger
-    the risk engine manually.</p>
+  <p class="subtext">Risk is recalculated automatically whenever a lecturer saves attendance or marks.
+    Students can be added one at a time or imported in bulk from a CSV file, and lecturers keep their own course rosters.
+    Use recompute after a large import or a change to the scoring model.</p>
   <div class="btn-row">
+    <form method="post" action="{{ url_for('admin_recompute') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">Recompute risk &amp; send alerts</button></form>
+    <a class="btn secondary" href="{{ url_for('admin_students_import') }}">Import students (CSV)</a>
+    {% if demo_tools %}
     <form method="post" action="{{ url_for('admin_seed') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn secondary" type="submit">Seed demo dataset</button></form>
-    <form method="post" action="{{ url_for('admin_recompute') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">Recompute risk & send alerts</button></form>
-    <form method="post" action="{{ url_for('admin_reset') }}" onsubmit="return confirm('This wipes all data. Continue?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn secondary" type="submit">Reset database</button></form>
+    <form method="post" action="{{ url_for('admin_reset') }}" onsubmit="return confirm('This wipes all data and loads a fresh demo dataset. Continue?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn danger" type="submit">Reset database</button></form>
+    {% endif %}
   </div>
+  {% if demo_tools %}<p class="subtext" style="margin-top:10px;">Demo tools are shown because this copy runs without a production database. They are hidden on the live site.</p>{% endif %}
 </div>
 
 <div class="panel">
