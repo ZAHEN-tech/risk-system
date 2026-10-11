@@ -1,7 +1,7 @@
 import random
 from models import (
     db, Department, User, Course, Student, Enrollment,
-    AttendanceRecord, Assessment
+    AttendanceRecord, Assessment, AssessmentDefinition
 )
 
 FIRST_NAMES = ["Amara", "Ben", "Chen", "Dovi", "Elena", "Farida", "Grace", "Hemi",
@@ -90,9 +90,28 @@ def build_student_profile(kind, seq_len=N_ASSESSMENTS, weeks=WEEKS):
     return attendance, scores
 
 
+_definitions_cache = {}
+
+
+def definition_for(course, i):
+    """One class-wide AssessmentDefinition per course per item number, so seeded
+    marks show up on the lecturer's Assessments page like UI-created ones."""
+    key = (course.id, i)
+    if key not in _definitions_cache:
+        d = AssessmentDefinition.query.filter_by(course_id=course.id, sequence=i).first()
+        if d is None:
+            d = AssessmentDefinition(course_id=course.id, title=f"Assessment {i}",
+                                     assessment_type="Coursework", sequence=i, max_score=100.0)
+            db.session.add(d)
+            db.session.flush()
+        _definitions_cache[key] = d
+    return _definitions_cache[key]
+
+
 def seed():
     if Department.query.first():
         return  # already seeded
+    _definitions_cache.clear()
 
     departments = {}
     for dname in ["Computing & IT", "Business Studies", "Engineering"]:
@@ -184,9 +203,7 @@ def seed():
             for i, (submitted, score) in enumerate(scores, start=1):
                 db.session.add(Assessment(
                     enrollment_id=enr.id,
-                    title=f"Assessment {i}",
-                    sequence=i,
-                    max_score=100.0,
+                    definition_id=definition_for(course, i).id,
                     score=score,
                     submitted=submitted,
                 ))
