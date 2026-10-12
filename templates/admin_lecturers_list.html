@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_bulk_panel.html" import bulk_panel with context %}
 {% block title %}Lecturer Management{% endblock %}
 {% block content %}
 <div class="eyebrow">Administrator</div>
@@ -50,4 +51,7 @@
     </tbody>
   </table>
 </div>
+
+{{ bulk_panel(url_for('admin_lecturers_bulk_delete'), bulk_count('lecturers') ~ ' lecturer accounts in total',
+   'Deletes the chosen lecturer accounts. Their courses are kept but become unassigned.', departments) }}
 {% endblock %}

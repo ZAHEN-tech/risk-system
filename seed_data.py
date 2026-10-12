@@ -109,8 +109,8 @@ def definition_for(course, i):
 
 
 def seed():
-    if Department.query.first():
-        return  # already seeded
+    if Department.query.first() or User.query.filter(User.role != "admin").first():
+        return  # already seeded, or real records exist: never mix demo data in
     _definitions_cache.clear()
 
     departments = {}
@@ -121,7 +121,8 @@ def seed():
         departments[dname] = d
 
     # --- Staff ---
-    admin = make_user("admin", "System Administrator", "admin")
+    # Reuse the administrator if one survived a "delete all" (usernames are unique).
+    admin = User.query.filter_by(username="admin").first() or make_user("admin", "System Administrator", "admin")
 
     hods = {}
     for dname, d in departments.items():

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_bulk_panel.html" import bulk_panel with context %}
 {% block title %}Department Management{% endblock %}
 {% block content %}
 <div class="eyebrow">Administrator</div>
@@ -50,4 +51,10 @@
   </table>
   {% if rows %}<p class="subtext" style="margin-top:10px;">A department can be deleted only when no courses, students or staff belong to it. If something is still linked, Delete tells you what to move first.</p>{% endif %}
 </div>
+
+{% set dept_list = rows|map(attribute='department')|list %}
+{{ bulk_panel(url_for('admin_departments_bulk_delete'), bulk_count('departments') ~ ' departments in total',
+   'Deletes the chosen departments and everything in them: their courses, students (with parent accounts), lecturers, '
+   'heads and counsellors, and all attendance, marks, alerts and notes. Counsellors with no department are kept.',
+   dept_list) }}
 {% endblock %}

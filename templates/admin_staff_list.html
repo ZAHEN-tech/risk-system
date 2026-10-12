@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_bulk_panel.html" import bulk_panel with context %}
 {% block title %}Heads & counsellors{% endblock %}
 {% block content %}
 <div class="eyebrow">Administrator</div>
@@ -53,4 +54,9 @@
     </tbody>
   </table>
 </div>
+
+{% set role_select %}<div class="field"><label>Which accounts</label><select name="role"><option value="">Heads and counsellors</option><option value="hod">Heads of department only</option><option value="counsellor">Counsellors only</option></select></div>{% endset %}
+{{ bulk_panel(url_for('admin_staff_bulk_delete'), bulk_count('staff') ~ ' head and counsellor accounts in total',
+   'Deletes the chosen accounts. Students lose that counsellor, and intervention notes the counsellors wrote are deleted.',
+   departments, extra=role_select) }}
 {% endblock %}

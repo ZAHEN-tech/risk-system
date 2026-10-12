@@ -1,0 +1,36 @@
+{# Admin-only bulk delete panel, collapsed by default. Needs the word DELETE
+   typed and the admin's own password. #}
+{% macro bulk_panel(action_url, summary, warning, departments=none, logs_option=true, extra=none) %}
+<details class="panel bulk-panel">
+  <summary><span class="bulk-title">Delete in bulk</span> <span class="subtext">— {{ summary }}</span></summary>
+  <form method="post" action="{{ action_url }}" class="bulk-form"
+        onsubmit="return confirm('This permanently deletes the records described. It cannot be undone. Continue?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p class="bulk-warning">{{ warning }} <strong>This cannot be undone.</strong></p>
+    <div class="bulk-grid">
+      {% if extra %}{{ extra|safe }}{% endif %}
+      {% if departments is not none %}
+      <div class="field">
+        <label>Which records</label>
+        <select name="department_id">
+          <option value="">All departments</option>
+          {% for d in departments %}<option value="{{ d.id }}">Only {{ d.name }}</option>{% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="field">
+        <label>Type {{ bulk_word }} to confirm</label>
+        <input type="text" name="confirm_word" autocomplete="off" placeholder="{{ bulk_word }}" required>
+      </div>
+      <div class="field">
+        <label>Your password</label>
+        <input type="password" name="admin_password" autocomplete="current-password" required>
+      </div>
+    </div>
+    {% if logs_option %}
+    <label class="bulk-check"><input type="checkbox" name="delete_logs"> Also delete their entries in the activity log
+      <span class="subtext">(otherwise their past sign-ins and actions stay, labelled "Deleted account")</span></label>
+    {% endif %}
+    <button class="btn danger" type="submit">Delete permanently</button>
+  </form>
+</details>
+{% endmacro %}

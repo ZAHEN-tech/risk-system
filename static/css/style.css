@@ -445,3 +445,20 @@ textarea{min-height:90px; resize:vertical;}
   .dept-actions{justify-content:flex-start; margin-top:6px;}
   .dept-rename input{min-width:0; flex:1;}
 }
+
+/* Bulk delete panels (admin) */
+.bulk-panel{border-color:color-mix(in srgb, var(--high) 30%, var(--rule)); margin-top:22px;}
+.bulk-panel > summary{cursor:pointer; list-style:none; display:flex; gap:6px; align-items:baseline; flex-wrap:wrap;}
+.bulk-panel > summary::-webkit-details-marker{display:none;}
+.bulk-panel > summary::before{content:"▸"; color:var(--high); margin-right:4px; transition:transform .15s ease;}
+.bulk-panel[open] > summary::before{transform:rotate(90deg);}
+.bulk-title{color:var(--high); font-weight:700;}
+.bulk-form{margin-top:14px;}
+.bulk-warning{margin:0 0 12px; color:var(--ink);}
+.bulk-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:10px;}
+.bulk-grid .field{margin-bottom:0;}
+.bulk-grid select, .bulk-grid input{width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:3px; background:var(--panel); color:var(--ink);}
+.bulk-check{display:flex; gap:8px; align-items:flex-start; margin:6px 0 14px; font-size:.92rem; flex-wrap:wrap;}
+.bulk-check input{margin-top:3px;}
+.bulk-radios{display:flex; gap:18px; margin-bottom:10px;}
+.bulk-radios input{margin-right:6px;}

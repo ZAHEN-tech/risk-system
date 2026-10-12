@@ -197,6 +197,7 @@ ACTIVITY_LABELS = {
     "account.delete": "Account deleted", "department.create": "Department created",
     "department.update": "Department renamed", "department.delete": "Department deleted",
     "course.create": "Course created", "course.update": "Course updated", "course.delete": "Course deleted",
+    "bulk.delete": "Bulk delete", "log.clear": "Activity log cleared",
 }
 
 
@@ -1372,7 +1373,8 @@ def admin_staff_list():
         "caseload": Student.query.filter_by(counsellor_id=u.id).count() if u.role == "counsellor" else None,
     } for u in staff]
     return render_template("admin_staff_list.html", rows=rows, q=q, role=role,
-                           show_inactive=show_inactive, roles=STAFF_ROLES)
+                           show_inactive=show_inactive, roles=STAFF_ROLES,
+                           departments=Department.query.order_by(Department.name).all())
 
 
 @app.route("/admin/staff/new", methods=["GET", "POST"])
@@ -1605,6 +1607,209 @@ def admin_activity():
     offset = timedelta(hours=float(os.environ.get("LOCAL_UTC_OFFSET_HOURS", "12")))
     return render_template("admin_activity.html", pagination=pagination, entries=pagination.items,
                            labels=ACTIVITY_LABELS, action=action, who=who, offset=offset)
+
+
+# ------------------------------------------------- Bulk delete (admin only) -
+
+BULK_WORD = "DELETE"
+
+
+def _bulk_confirmed(back_url):
+    """Bulk deletes need the word DELETE typed and the admin's own password.
+    Returns None when confirmed, otherwise a redirect back with a message."""
+    if request.form.get("confirm_word", "").strip() != BULK_WORD:
+        flash(f"Nothing was deleted. Type {BULK_WORD} in capitals to confirm.", "error")
+        return redirect(back_url)
+    if not current_user.check_password(request.form.get("admin_password", "")):
+        flash("Nothing was deleted. Your password was not correct.", "error")
+        return redirect(back_url)
+    return None
+
+
+def _bulk_scope():
+    dept_id = request.form.get("department_id", type=int)
+    dept = db.session.get(Department, dept_id) if dept_id else None
+    return dept, (f"in {dept.name}" if dept else "in all departments")
+
+
+def _plural(n, word, plural=None):
+    return f"{n} {word if n == 1 else (plural or word + 's')}"
+
+
+@app.context_processor
+def inject_bulk_helpers():
+    def bulk_count(kind):
+        if kind == "students":
+            return Student.query.count()
+        if kind == "courses":
+            return Course.query.count()
+        if kind == "lecturers":
+            return User.query.filter_by(role="lecturer").count()
+        if kind == "staff":
+            return User.query.filter(User.role.in_(STAFF_ROLES)).count()
+        if kind == "departments":
+            return Department.query.count()
+        if kind == "log":
+            return ActivityLog.query.count()
+        return 0
+    return {"bulk_count": bulk_count, "bulk_word": BULK_WORD}
+
+
+@app.route("/admin/students/bulk_delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_students_bulk_delete():
+    back = url_for("admin_students_list")
+    refused = _bulk_confirmed(back)
+    if refused:
+        return refused
+    dept, where = _bulk_scope()
+    q = Student.query.filter_by(department_id=dept.id) if dept else Student.query
+    ids = [s.id for s in q.all()]
+    if not ids:
+        flash(f"There are no students {where} to delete.", "info")
+        return redirect(back)
+    logs = request.form.get("delete_logs") == "on"
+    c = deletion.bulk_delete_students(ids, delete_logs=logs)
+    msg = (f"Deleted {_plural(c['students'], 'student')} {where}, with {_plural(c['enrolments'], 'enrolment')}, "
+           f"{_plural(c['notes'], 'intervention note')} and {_plural(c['parents'], 'parent account')}"
+           + (f"; removed {_plural(c['log_entries'], 'activity-log entry', 'activity-log entries')}." if logs else "."))
+    log_activity("bulk.delete", msg)
+    db.session.commit()
+    flash(msg, "success")
+    return redirect(back)
+
+
+@app.route("/admin/courses/bulk_delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_courses_bulk_delete():
+    back = url_for("admin_courses_list")
+    refused = _bulk_confirmed(back)
+    if refused:
+        return refused
+    dept, where = _bulk_scope()
+    q = Course.query.filter_by(department_id=dept.id) if dept else Course.query
+    ids = [x.id for x in q.all()]
+    if not ids:
+        flash(f"There are no courses {where} to delete.", "info")
+        return redirect(back)
+    c = deletion.bulk_delete_courses(ids)
+    msg = (f"Deleted {_plural(c['courses'], 'course')} {where}, with {_plural(c['enrolments'], 'enrolment')} "
+           "and their attendance, marks and assessment items. Students were kept.")
+    log_activity("bulk.delete", msg)
+    db.session.commit()
+    flash(msg, "success")
+    return redirect(back)
+
+
+def _bulk_delete_staff(roles, label, back):
+    refused = _bulk_confirmed(back)
+    if refused:
+        return refused
+    dept, where = _bulk_scope()
+    q = User.query.filter(User.role.in_(roles))
+    if dept:
+        q = q.filter(User.department_id == dept.id)
+    ids = [u.id for u in q.all()]
+    if not ids:
+        flash(f"There are no {label} {where} to delete.", "info")
+        return redirect(back)
+    logs = request.form.get("delete_logs") == "on"
+    c = deletion.bulk_delete_staff(ids, delete_logs=logs)
+    msg = (f"Deleted {_plural(c['accounts'], 'account')} ({label}) {where}. "
+           f"{_plural(c['courses_unassigned'], 'course')} now unassigned, "
+           f"{_plural(c['students_unassigned'], 'student')} without a counsellor, "
+           f"{_plural(c['notes'], 'intervention note')} removed"
+           + (f", {_plural(c['log_entries'], 'activity-log entry', 'activity-log entries')} removed." if logs else "."))
+    log_activity("bulk.delete", msg)
+    db.session.commit()
+    flash(msg, "success")
+    return redirect(back)
+
+
+@app.route("/admin/lecturers/bulk_delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_lecturers_bulk_delete():
+    return _bulk_delete_staff(["lecturer"], "lecturers", url_for("admin_lecturers_list"))
+
+
+@app.route("/admin/staff/bulk_delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_staff_bulk_delete():
+    role = request.form.get("role", "")
+    roles = [role] if role in STAFF_ROLES else list(STAFF_ROLES)
+    label = {"hod": "heads of department", "counsellor": "counsellors"}.get(role, "heads and counsellors")
+    return _bulk_delete_staff(roles, label, url_for("admin_staff_list"))
+
+
+@app.route("/admin/departments/bulk_delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_departments_bulk_delete():
+    back = url_for("admin_departments")
+    refused = _bulk_confirmed(back)
+    if refused:
+        return refused
+    dept, where = _bulk_scope()
+    ids = [dept.id] if dept else [d.id for d in Department.query.all()]
+    if not ids:
+        flash("There are no departments to delete.", "info")
+        return redirect(back)
+    logs = request.form.get("delete_logs") == "on"
+    c = deletion.bulk_delete_departments(ids, delete_logs=logs)
+    msg = (f"Deleted {_plural(c['departments'], 'department')} ({dept.name if dept else 'all'}) with "
+           f"{_plural(c['courses'], 'course')}, {_plural(c['students'], 'student')}, "
+           f"{_plural(c['parents'], 'parent account')}, {_plural(c['staff'], 'staff account')}, "
+           f"{_plural(c['enrolments'], 'enrolment')} and {_plural(c['notes'], 'intervention note')}"
+           + (f"; removed {_plural(c['log_entries'], 'activity-log entry', 'activity-log entries')}." if logs else "."))
+    log_activity("bulk.delete", msg)
+    db.session.commit()
+    flash(msg, "success")
+    return redirect(back)
+
+
+@app.route("/admin/activity/clear", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_activity_clear():
+    back = url_for("admin_activity")
+    refused = _bulk_confirmed(back)
+    if refused:
+        return refused
+    offset = timedelta(hours=float(os.environ.get("LOCAL_UTC_OFFSET_HOURS", "12")))
+    mode = request.form.get("mode", "range")
+    start = end = None
+    if mode != "all":
+        try:
+            d_from = request.form.get("date_from", "").strip()
+            d_to = request.form.get("date_to", "").strip()
+            if d_from:
+                start = datetime.strptime(d_from, "%Y-%m-%d") - offset
+            if d_to:
+                end = datetime.strptime(d_to, "%Y-%m-%d") + timedelta(days=1) - offset
+        except ValueError:
+            flash("Nothing was deleted. Choose valid dates.", "error")
+            return redirect(back)
+        if start is None and end is None:
+            flash("Nothing was deleted. Choose a start date, an end date, or both, or pick \"Everything\".", "error")
+            return redirect(back)
+        if start and end and start >= end:
+            flash("Nothing was deleted. The start date must be on or before the end date.", "error")
+            return redirect(back)
+    n = deletion.clear_activity_log(start, end)
+    if mode == "all":
+        period = "all entries"
+    else:
+        period = ("from " + request.form.get("date_from") if start else "from the beginning") + \
+                 (" to " + request.form.get("date_to") if end else " to now")
+    msg = f"Cleared {_plural(n, 'activity-log entry', 'activity-log entries')} ({period}, Fiji time)."
+    log_activity("log.clear", msg)
+    db.session.commit()
+    flash(msg, "success")
+    return redirect(back)
 
 
 @app.route("/admin/model")

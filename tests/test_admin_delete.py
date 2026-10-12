@@ -150,7 +150,7 @@ def test_parent_with_other_children_is_kept(app):
     db.session.commit()
     r = c.post(f"/admin/students/{s.id}/delete", {}, form_url=f"/admin/students/{s.id}")
     assert "Deleted Twin Student" in r.get_data(as_text=True)
-    assert "parent account" not in r.get_data(as_text=True)
+    assert "Their parent account" not in r.get_data(as_text=True)
     db.session.expire_all()
     assert db.session.get(User, parent_id) is not None
 

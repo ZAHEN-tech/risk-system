@@ -57,4 +57,23 @@
   </div>
   {% endif %}
 </div>
+
+<details class="panel bulk-panel">
+  <summary><span class="bulk-title">Clear the activity log</span> <span class="subtext">— {{ bulk_count('log') }} entries in total</span></summary>
+  <form method="post" action="{{ url_for('admin_activity_clear') }}" class="bulk-form"
+        onsubmit="return confirm('This permanently deletes the chosen activity-log entries. Continue?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p class="bulk-warning">Deleted entries cannot be recovered. A single line recording that you cleared the log is kept. Dates are Fiji time and both days are included.</p>
+    <div class="bulk-radios">
+      <label><input type="radio" name="mode" value="range" checked> A period</label>
+      <label><input type="radio" name="mode" value="all"> Everything</label>
+    </div>
+    <div class="bulk-grid">
+      <div class="field"><label>From (leave empty for the beginning)</label><input type="date" name="date_from"></div>
+      <div class="field"><label>To (leave empty for today)</label><input type="date" name="date_to"></div>
+      <div class="field"><label>Type {{ bulk_word }} to confirm</label><input type="text" name="confirm_word" autocomplete="off" placeholder="{{ bulk_word }}" required></div>
+      <div class="field"><label>Your password</label><input type="password" name="admin_password" autocomplete="current-password" required></div>
+    </div>
+    <button class="btn danger" type="submit">Clear entries</button>
+  </form>
+</details>
 {% endblock %}
