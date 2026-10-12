@@ -27,6 +27,7 @@ from sqlalchemy import inspect
 import ml_engine
 import analytics
 import reports
+import deletion
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -193,6 +194,9 @@ ACTIVITY_LABELS = {
     "enrolment.restore": "Enrolment restored", "enrolment.delete": "Enrolment deleted", "import.students": "Students imported",
     "attendance.save": "Attendance saved", "marks.save": "Marks saved", "risk.recompute": "Risk recomputed",
     "demo.seed": "Demo data loaded", "demo.reset": "Database reset",
+    "account.delete": "Account deleted", "department.create": "Department created",
+    "department.update": "Department renamed", "department.delete": "Department deleted",
+    "course.create": "Course created", "course.update": "Course updated", "course.delete": "Course deleted",
 }
 
 
@@ -862,7 +866,31 @@ def admin_student_profile(student_id):
     return render_template(
         "admin_student_profile.html", student=student, rows=rows, withdrawn=withdrawn,
         available_courses=available_courses, notes=notes,
+        delete_blockers=deletion.student_blockers(student),
     )
+
+
+@app.route("/admin/students/<int:student_id>/delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_student_delete(student_id):
+    student = Student.query.get_or_404(student_id)
+    blockers = deletion.student_blockers(student)
+    if blockers:
+        flash(f"{student.user.full_name} can't be deleted: " + " ".join(blockers) + " Deactivate the account instead.", "error")
+        return redirect(url_for("admin_student_profile", student_id=student.id))
+    name = student.user.full_name
+    label = f"Student {student.student_number} ({name})"
+    parent_removed = deletion.delete_student(student)
+    if parent_removed:
+        label += f" and parent account ({parent_removed})"
+    log_activity("account.delete", label)
+    db.session.commit()
+    msg = f"Deleted {name}."
+    if parent_removed:
+        msg += f" Their parent account ({parent_removed}) had no other children and was removed too."
+    flash(msg, "success")
+    return redirect(url_for("admin_students_list"))
 
 
 @app.route("/admin/students/<int:student_id>/edit", methods=["GET", "POST"])
@@ -979,14 +1007,55 @@ def admin_departments():
             flash(f"A department named '{name}' already exists.", "error")
         else:
             db.session.add(Department(name=name))
+            log_activity("department.create", name)
             db.session.commit()
             flash(f"Created department: {name}.", "success")
         return redirect(url_for("admin_departments"))
 
     departments = Department.query.order_by(Department.name).all()
     rows = [{"department": d, "course_count": Course.query.filter_by(department_id=d.id).count(),
-             "student_count": Student.query.filter_by(department_id=d.id).count()} for d in departments]
+             "student_count": Student.query.filter_by(department_id=d.id).count(),
+             "staff_count": deletion.department_staff_count(d),
+             "blockers": deletion.department_blockers(d)} for d in departments]
     return render_template("admin_departments.html", rows=rows)
+
+
+@app.route("/admin/departments/<int:department_id>/rename", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_department_rename(department_id):
+    dept = Department.query.get_or_404(department_id)
+    name = request.form.get("name", "").strip()
+    if not name:
+        flash("Department name is required.", "error")
+    elif name == dept.name:
+        flash("The name is unchanged.", "info")
+    elif Department.query.filter(db.func.lower(Department.name) == name.lower(), Department.id != dept.id).first():
+        flash(f"A department named '{name}' already exists.", "error")
+    else:
+        old = dept.name
+        dept.name = name
+        log_activity("department.update", f"{old} renamed to {name}")
+        db.session.commit()
+        flash(f"Renamed {old} to {name}.", "success")
+    return redirect(url_for("admin_departments"))
+
+
+@app.route("/admin/departments/<int:department_id>/delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_department_delete(department_id):
+    dept = Department.query.get_or_404(department_id)
+    blockers = deletion.department_blockers(dept)
+    if blockers:
+        flash(f"{dept.name} can't be deleted: " + " ".join(blockers), "error")
+        return redirect(url_for("admin_departments"))
+    name = dept.name
+    deletion.delete_department(dept)
+    log_activity("department.delete", name)
+    db.session.commit()
+    flash(f"Deleted the department {name}.", "success")
+    return redirect(url_for("admin_departments"))
 
 
 @app.route("/admin/courses")
@@ -1027,6 +1096,7 @@ def admin_course_new():
             return render_template("admin_course_form.html", departments=departments, lecturers=lecturers, form=request.form)
 
         db.session.add(Course(code=code, name=name, department_id=department_id, lecturer_id=lecturer_id))
+        log_activity("course.create", f"{code} — {name}")
         db.session.commit()
         flash(f"Created course {code} — {name}.", "success")
         return redirect(url_for("admin_courses_list"))
@@ -1055,11 +1125,30 @@ def admin_course_edit(course_id):
         course.name = name
         course.department_id = request.form.get("department_id", type=int) or course.department_id
         course.lecturer_id = request.form.get("lecturer_id", type=int) or None
+        log_activity("course.update", f"{code} — {name}")
         db.session.commit()
         flash("Course updated.", "success")
         return redirect(url_for("admin_courses_list"))
 
-    return render_template("admin_course_form.html", course=course, departments=departments, lecturers=lecturers, form={})
+    return render_template("admin_course_form.html", course=course, departments=departments, lecturers=lecturers,
+                           form={}, delete_blockers=deletion.course_blockers(course))
+
+
+@app.route("/admin/courses/<int:course_id>/delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_course_delete(course_id):
+    course = Course.query.get_or_404(course_id)
+    blockers = deletion.course_blockers(course)
+    if blockers:
+        flash(f"{course.code} can't be deleted: " + " ".join(blockers), "error")
+        return redirect(url_for("admin_course_edit", course_id=course.id))
+    label = f"{course.code} — {course.name}"
+    deletion.delete_course(course)
+    log_activity("course.delete", label)
+    db.session.commit()
+    flash(f"Deleted the course {label}.", "success")
+    return redirect(url_for("admin_courses_list"))
 
 
 # ----------------------------------------------------- Lecturer Management -
@@ -1145,7 +1234,30 @@ def admin_lecturer_profile(lecturer_id):
     return render_template(
         "admin_lecturer_profile.html", lecturer=lecturer,
         assigned_courses=assigned_courses, available_courses=available_courses,
+        delete_blockers=deletion.staff_blockers(lecturer),
     )
+
+
+@app.route("/admin/lecturers/<int:lecturer_id>/delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_lecturer_delete(lecturer_id):
+    lecturer = User.query.filter_by(id=lecturer_id, role="lecturer").first_or_404()
+    return _admin_delete_staff(lecturer, url_for("admin_lecturer_profile", lecturer_id=lecturer.id),
+                               url_for("admin_lecturers_list"))
+
+
+def _admin_delete_staff(user, back_url, done_url):
+    blockers = deletion.staff_blockers(user)
+    if blockers:
+        flash(f"{user.full_name} can't be deleted: " + " ".join(blockers) + " Deactivate the account instead.", "error")
+        return redirect(back_url)
+    name, label = user.full_name, f"{ROLE_LABELS.get(user.role)} {user.username} ({user.full_name})"
+    deletion.delete_staff(user)
+    log_activity("account.delete", label)
+    db.session.commit()
+    flash(f"Deleted the account for {name}.", "success")
+    return redirect(done_url)
 
 
 @app.route("/admin/lecturers/<int:lecturer_id>/edit", methods=["GET", "POST"])
@@ -1322,7 +1434,16 @@ def admin_staff_profile(user_id):
         caseload = (Student.query.filter_by(counsellor_id=user.id)
                     .join(User, Student.user_id == User.id).order_by(User.full_name).all())
     return render_template("admin_staff_profile.html", staff=user, roles=STAFF_ROLES,
-                           caseload=caseload, worst=student_worst_risk)
+                           caseload=caseload, worst=student_worst_risk,
+                           delete_blockers=deletion.staff_blockers(user))
+
+
+@app.route("/admin/staff/<int:user_id>/delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_staff_delete(user_id):
+    user = staff_or_404(user_id)
+    return _admin_delete_staff(user, url_for("admin_staff_profile", user_id=user.id), url_for("admin_staff_list"))
 
 
 @app.route("/admin/staff/<int:user_id>/edit", methods=["GET", "POST"])

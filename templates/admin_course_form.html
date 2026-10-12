@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_delete_panel.html" import delete_panel %}
 {% block title %}{{ 'New Course' if not course else 'Edit Course' }}{% endblock %}
 {% block content %}
 <div class="eyebrow"><a href="{{ url_for('admin_courses_list') }}">← Courses</a></div>
@@ -41,4 +42,10 @@
     </div>
   </form>
 </div>
+
+{% if course %}
+{{ delete_panel(url_for('admin_course_delete', course_id=course.id), 'course', delete_blockers,
+   'Removes a course added by mistake, with any assessments set up for it.',
+   alternative='A course that has had students keeps its records for reports and audits.', style='max-width:480px;') }}
+{% endif %}
 {% endblock %}

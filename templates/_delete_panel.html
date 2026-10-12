@@ -1,0 +1,20 @@
+{# Shared "Delete permanently" panel. If anything would be lost, it lists the
+   reasons instead of offering the button, and points to Deactivate. #}
+{% macro delete_panel(action_url, what, blockers, consequences, alternative="Deactivate the account instead: it blocks sign-in but keeps their history.", style="") %}
+<div class="panel delete-panel"{% if style %} style="{{ style }}"{% endif %}>
+  <h3>Delete permanently</h3>
+  {% if blockers %}
+  <p class="subtext">This {{ what }} can't be deleted, because its history would be lost:</p>
+  <ul class="delete-reasons">
+    {% for b in blockers %}<li>{{ b }}</li>{% endfor %}
+  </ul>
+  {% if alternative %}<p class="subtext">{{ alternative }}</p>{% endif %}
+  {% else %}
+  <p class="subtext">{{ consequences }} This cannot be undone.</p>
+  <form method="post" action="{{ action_url }}"
+        onsubmit="return confirm('Permanently delete this {{ what }}? This cannot be undone.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn danger" type="submit">Delete this {{ what }}</button>
+  </form>
+  {% endif %}
+</div>
+{% endmacro %}

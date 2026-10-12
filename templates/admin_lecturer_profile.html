@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_delete_panel.html" import delete_panel %}
 {% from "_password_field.html" import password_field %}
 {% block title %}{{ lecturer.full_name }}{% endblock %}
 {% block content %}
@@ -66,4 +67,7 @@
   <p class="subtext" style="margin-top:8px;">Assigning a course already taught by someone else reassigns it — the
     previous lecturer loses access to that course's roster, attendance, and assessments.</p>
 </div>
+
+{{ delete_panel(url_for('admin_lecturer_delete', lecturer_id=lecturer.id), 'lecturer account', delete_blockers,
+   'Removes the account of a lecturer added by mistake. Their past sign-ins stay in the activity log, labelled with their name.') }}
 {% endblock %}

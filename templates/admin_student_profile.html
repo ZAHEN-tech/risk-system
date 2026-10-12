@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_delete_panel.html" import delete_panel %}
 {% from "_password_field.html" import password_field %}
 {% from "_risk_table.html" import risk_table %}
 {% block title %}{{ student.user.full_name }}{% endblock %}
@@ -100,4 +101,7 @@
   <p class="subtext">No interventions logged yet. Logged by the student's assigned counsellor from their caseload view.</p>
   {% endfor %}
 </div>
+
+{{ delete_panel(url_for('admin_student_delete', student_id=student.id), 'student', delete_blockers,
+   'Removes a student added by mistake, with their empty enrolments and alerts. Their parent account is removed too if it has no other child here.') }}
 {% endblock %}

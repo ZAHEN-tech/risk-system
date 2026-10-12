@@ -35,7 +35,7 @@
     {% for e in entries %}
       <tr>
         <td style="white-space:nowrap;">{{ (e.created_at + offset).strftime('%d %b %Y, %H:%M') }}</td>
-        <td>{% if e.user %}{{ e.user.full_name }}<div class="subtext">{{ e.user.username }} · {{ role_labels.get(e.user.role, e.user.role) }}</div>{% else %}<span class="subtext">System</span>{% endif %}</td>
+        <td>{% if e.user %}{{ e.user.full_name }}<div class="subtext">{{ e.user.username }} · {{ role_labels.get(e.user.role, e.user.role) }}</div>{% elif e.detail and e.detail.startswith("[Deleted account ") %}<span class="subtext">Deleted account</span>{% else %}<span class="subtext">System</span>{% endif %}</td>
         <td><span class="pill">{{ labels.get(e.action, e.action) }}</span></td>
         <td>{{ e.detail or '' }}{% if e.ip_address %}<div class="subtext">{{ e.ip_address }}</div>{% endif %}</td>
       </tr>

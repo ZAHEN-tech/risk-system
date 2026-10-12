@@ -428,3 +428,20 @@ textarea{min-height:90px; resize:vertical;}
   table.stack-mobile td{border:0; padding:4px 0; text-align:left !important;}
   table.stack-mobile .inline-form select, table.stack-mobile .inline-form input[type=text]{flex:1 1 100%; min-width:0;}
 }
+
+/* "Delete permanently" panel (admin) */
+.delete-panel{border-color:color-mix(in srgb, var(--high) 30%, var(--rule));}
+.delete-panel h3{color:var(--high);}
+.delete-reasons{margin:6px 0 10px 18px; padding:0;}
+.delete-reasons li{margin:4px 0;}
+.dept-actions{display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap;}
+.dept-actions details summary{cursor:pointer; list-style:none;}
+.dept-actions details summary::-webkit-details-marker{display:none;}
+.dept-rename{display:flex; gap:8px; margin-top:8px;}
+.dept-rename input{padding:7px 10px; border:1px solid var(--rule); border-radius:3px; min-width:200px; background:var(--panel); color:var(--ink);}
+.m-only{display:none;}
+@media (max-width:640px){
+  .m-only{display:inline;} .d-only{display:none;}
+  .dept-actions{justify-content:flex-start; margin-top:6px;}
+  .dept-rename input{min-width:0; flex:1;}
+}

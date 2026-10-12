@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_delete_panel.html" import delete_panel %}
 {% from "_password_field.html" import password_field %}
 {% block title %}{{ staff.full_name }}{% endblock %}
 {% block content %}
@@ -63,4 +64,7 @@
     and sees that department's dashboard and reports.</p>
 </div>
 {% endif %}
+
+{{ delete_panel(url_for('admin_staff_delete', user_id=staff.id), roles[staff.role]|lower ~ ' account', delete_blockers,
+   'Removes an account added by mistake. Their past sign-ins stay in the activity log, labelled with their name.') }}
 {% endblock %}

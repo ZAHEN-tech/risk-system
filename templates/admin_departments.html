@@ -16,19 +16,38 @@
 </div>
 
 <div class="panel">
-  <table>
-    <thead><tr><th>Department</th><th>Courses</th><th>Students</th></tr></thead>
+  <table class="stack-mobile">
+    <thead><tr><th>Department</th><th>Courses</th><th>Students</th><th>Staff</th><th></th></tr></thead>
     <tbody>
       {% for r in rows %}
+      {% set d = r.department %}
       <tr>
-        <td>{{ r.department.name }}</td>
-        <td>{{ r.course_count }}</td>
-        <td>{{ r.student_count }}</td>
+        <td><strong class="m-only">{{ d.name }}</strong><span class="d-only">{{ d.name }}</span></td>
+        <td><span class="m-only subtext">Courses: </span>{{ r.course_count }}</td>
+        <td><span class="m-only subtext">Students: </span>{{ r.student_count }}</td>
+        <td><span class="m-only subtext">Staff: </span>{{ r.staff_count }}</td>
+        <td>
+          <div class="dept-actions">
+            <details>
+              <summary class="btn secondary small">Rename</summary>
+              <form class="dept-rename" method="post" action="{{ url_for('admin_department_rename', department_id=d.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="name" value="{{ d.name }}" required aria-label="New name for {{ d.name }}">
+                <button class="btn small" type="submit">Save</button>
+              </form>
+            </details>
+            <form method="post" action="{{ url_for('admin_department_delete', department_id=d.id) }}"
+                  {% if not r.blockers %}onsubmit="return confirm('Permanently delete this department? This cannot be undone.');"{% endif %}><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn danger small" type="submit"
+                      {% if r.blockers %}title="Can't delete yet: {{ r.blockers|join(' ') }}"{% endif %}>Delete</button>
+            </form>
+          </div>
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="3" class="subtext">No departments yet — add one above to get started.</td></tr>
+      <tr><td colspan="5" class="subtext">No departments yet — add one above to get started.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  {% if rows %}<p class="subtext" style="margin-top:10px;">A department can be deleted only when no courses, students or staff belong to it. If something is still linked, Delete tells you what to move first.</p>{% endif %}
 </div>
 {% endblock %}
