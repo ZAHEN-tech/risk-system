@@ -48,7 +48,7 @@
         <td><a href="{{ url_for('admin_student_profile', student_id=s.id) }}">{{ s.user.full_name }}</a>
           <div class="subtext">{{ s.student_number }}</div></td>
         <td>{{ s.department.name }}</td>
-        <td>{% if w %}<span class="badge {{ w.risk_band|band_class }}">{{ w.risk_band }}</span>{% else %}—{% endif %}</td>
+        <td>{{ w|risk_badge(false) if w else '—' }}</td>
       </tr>
       {% else %}
       <tr><td colspan="3" class="subtext">No students assigned. Assign a counsellor from a student's Edit page.</td></tr>

@@ -74,7 +74,7 @@
     <thead><tr><th>Column</th><th>Required</th><th>What to enter</th></tr></thead>
     <tbody>
       <tr><td><code>full_name</code></td><td>Yes</td><td>The student's full name. Their username is made from it.</td></tr>
-      <tr><td><code>student_number</code></td><td>Yes</td><td>Must be new: not already used and not repeated in the file.</td></tr>
+      <tr><td><code>student_number</code></td><td>No</td><td>Must be new: not already used and not repeated in the file. Leave it blank and the next free ID (e.g. S2026101) is given.</td></tr>
       <tr><td><code>department</code></td><td>Yes</td><td>The department name exactly as it appears in {{ APP_NAME }}.</td></tr>
       <tr><td><code>year_of_study</code></td><td>No</td><td>1 to 8. Blank means 1.</td></tr>
       <tr><td><code>email</code></td><td>No</td><td>The student's email address.</td></tr>

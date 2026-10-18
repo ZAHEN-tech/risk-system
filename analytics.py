@@ -3,7 +3,10 @@ Prepares small, chart-ready data structures for the dashboard graphs.
 Kept separate from risk_engine.py because this is purely presentational
 aggregation (for Chart.js), not part of the risk-scoring logic itself.
 """
-from models import AttendanceRecord, Assessment, AssessmentDefinition, Enrollment
+import os
+from datetime import timedelta
+
+from models import AttendanceRecord, Assessment, AssessmentDefinition, Enrollment, RiskSnapshot
 
 
 def band_counts(risk_scores):
@@ -68,4 +71,15 @@ def student_score_series(enrollment_id):
     )
     labels = [a.title for a in rows]
     values = [round(100.0 * a.score / a.max_score, 1) if a.max_score else 0 for a in rows]
+    return labels, values
+
+
+def risk_history_series(enrollment_id):
+    """How one enrolment's risk score moved over time (FR-11). Returns (labels, values);
+    labels are Fiji-time dates, e.g. '12 Oct 14:05'."""
+    offset = timedelta(hours=float(os.environ.get("LOCAL_UTC_OFFSET_HOURS", "12")))
+    snaps = (RiskSnapshot.query.filter_by(enrollment_id=enrollment_id)
+             .order_by(RiskSnapshot.taken_at, RiskSnapshot.id).all())
+    labels = [(sn.taken_at + offset).strftime("%d %b %H:%M") for sn in snaps]
+    values = [sn.risk_score for sn in snaps]
     return labels, values

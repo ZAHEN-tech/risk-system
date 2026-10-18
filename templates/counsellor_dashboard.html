@@ -20,6 +20,27 @@
 </div>
 {% endif %}
 
+{% if followups %}
+<div class="panel">
+  <h3>Follow-ups due</h3>
+  <p class="subtext" style="margin-bottom:8px;">Overdue, or due in the next 7 days, and not yet resolved.</p>
+  <table>
+    <thead><tr><th>Student</th><th>Follow up</th><th>Status</th><th>Action taken</th><th></th></tr></thead>
+    <tbody>
+      {% for n in followups %}
+      <tr>
+        <td>{{ n.student.user.full_name }}<div class="subtext">{{ n.student.student_number }}</div></td>
+        <td class="{{ 'overdue' if n.follow_up_date < today }}">{{ n.follow_up_date.strftime('%a %d %b') }}{% if n.follow_up_date < today %} · overdue{% elif n.follow_up_date == today %} · today{% endif %}</td>
+        <td><span class="status-pill status-{{ n.status|lower|replace(' ', '-') }}">{{ n.status }}</span></td>
+        <td>{{ n.action_taken or '—' }}</td>
+        <td><a class="btn secondary small" href="{{ url_for('counsellor_student_detail', student_id=n.student_id) }}">Open case</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <div class="panel">
   <h3>Students flagged for support</h3>
   <table>
@@ -30,7 +51,7 @@
       {% for r in rows %}
       <tr>
         <td>{{ r.student.user.full_name }}<div class="subtext">{{ r.student.student_number }} · Year {{ r.student.year_of_study }}</div></td>
-        <td><span class="badge {{ r.risk.risk_band|band_class }}">{{ r.risk.risk_band }} · {{ r.risk.risk_score }}</span></td>
+        <td>{{ r.risk|risk_badge }}</td>
         <td>{{ r.n_flagged_courses }} course(s)</td>
         <td><a class="btn secondary" href="{{ url_for('counsellor_student_detail', student_id=r.student.id) }}">Open case</a></td>
       </tr>

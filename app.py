@@ -1,6 +1,7 @@
 import base64
 import csv
 import io
+import math
 import os
 import re
 import secrets
@@ -10,11 +11,12 @@ from flask_login import (
     LoginManager, login_user, logout_user, login_required, current_user
 )
 from flask_wtf.csrf import CSRFProtect, CSRFError
+from markupsafe import Markup, escape
 
 from models import (
     db, User, Department, Course, Student, Enrollment,
     AttendanceRecord, Assessment, AssessmentDefinition, ASSESSMENT_TYPES,
-    RiskScore, Notification, InterventionNote, ActivityLog
+    RiskScore, RiskSnapshot, Notification, InterventionNote, ActivityLog, INTERVENTION_STATUSES
 )
 from risk_engine import (
     recompute_all, BAND_HIGH, BAND_MEDIUM, model_agreement_summary, get_ml_explanation,
@@ -28,6 +30,7 @@ import ml_engine
 import analytics
 import reports
 import deletion
+import mailer
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -198,6 +201,8 @@ ACTIVITY_LABELS = {
     "department.update": "Department renamed", "department.delete": "Department deleted",
     "course.create": "Course created", "course.update": "Course updated", "course.delete": "Course deleted",
     "bulk.delete": "Bulk delete", "log.clear": "Activity log cleared",
+    "intervention.add": "Intervention logged", "intervention.update": "Intervention updated",
+    "email.test": "Test email sent",
 }
 
 
@@ -425,6 +430,46 @@ def band_class(band):
 app.jinja_env.filters["band_class"] = band_class
 
 
+def local_offset():
+    return timedelta(hours=float(os.environ.get("LOCAL_UTC_OFFSET_HOURS", "12")))
+
+
+def to_local(dt):
+    """Stored times are UTC; show them in Fiji time (BUG-10)."""
+    return dt + local_offset() if dt else dt
+
+
+app.jinja_env.filters["local"] = to_local
+
+NO_DATA = "No data"
+
+
+def risk_badge(rs, show_score=True):
+    """The risk badge used everywhere. "No data" shows as Insufficient data
+    (FR-10), and a score resting on little evidence gets a "limited data" tag."""
+    if rs is None:
+        return Markup('<span class="badge risk-unknown">Not scored</span>')
+    if rs.risk_band == NO_DATA:
+        return Markup('<span class="badge risk-unknown" title="No attendance or marked work recorded yet">'
+                      'Insufficient data</span>')
+    text = rs.risk_band + (f" · {rs.risk_score}" if show_score else "")
+    html = f'<span class="badge {band_class(rs.risk_band)}">{escape(text)}</span>'
+    if rs.data_quality == "limited":
+        html += (' <span class="data-note" title="Fewer than 3 weeks of attendance, or no marked work yet. '
+                 'Treat this score with care.">limited data</span>')
+    return Markup(html)
+
+
+def pct(rs, field):
+    if rs is None or rs.risk_band == NO_DATA or getattr(rs, field) is None:
+        return "—"
+    return f"{getattr(rs, field)}%"
+
+
+app.jinja_env.filters["risk_badge"] = risk_badge
+app.jinja_env.filters["pct"] = pct
+
+
 def unique_username(base):
     """Turn a full name into a login-friendly, unique username (firstname.lastname, .2, .3, ...)."""
     slug = re.sub(r"[^a-z0-9.]", "", base.lower().replace(" ", "."))
@@ -441,7 +486,31 @@ def student_worst_risk(student: Student):
     risks = [e.risk for e in student.enrollments if e.risk]
     if not risks:
         return None
-    return max(risks, key=lambda r: r.risk_score)
+    scored = [r for r in risks if r.risk_band != NO_DATA]
+    return max(scored or risks, key=lambda r: r.risk_score)
+
+
+def student_number_allocator(extra_taken=()):
+    """Returns a function giving the next free student ID, S<year><nnn>
+    (e.g. S2026101), skipping IDs already used or about to be used (BUG-07)."""
+    prefix = f"S{local_now().year}"
+    taken = {n.lower() for (n,) in db.session.query(Student.student_number).all()}
+    taken |= {n.lower() for n in extra_taken if n}
+    highest = 0
+    for n in taken:
+        rest = n[len(prefix):]
+        if n.startswith(prefix.lower()) and rest.isdigit():
+            highest = max(highest, int(rest))
+    state = {"next": highest + 1}
+
+    def allocate():
+        while f"{prefix}{state['next']:03d}".lower() in taken:
+            state["next"] += 1
+        number = f"{prefix}{state['next']:03d}"
+        taken.add(number.lower())
+        state["next"] += 1
+        return number
+    return allocate
 
 
 def owned_course_or_404(course_id):
@@ -521,7 +590,7 @@ def admin_students_list():
         worst = (db.session.query(Enrollment.student_id.label("sid"),
                                   db.func.max(RiskScore.risk_score).label("worst"))
                  .join(RiskScore, RiskScore.enrollment_id == Enrollment.id)
-                 .filter(Enrollment.status == "active")
+                 .filter(Enrollment.status == "active", RiskScore.risk_band != NO_DATA)
                  .group_by(Enrollment.student_id).subquery())
         query = query.join(worst, worst.c.sid == Student.id)
         if band == "High":
@@ -570,11 +639,13 @@ def admin_student_new():
         parent_consent = request.form.get("parent_consent") == "on"
 
         errors = []
+        generated_number = not student_number
+        if generated_number:
+            student_number = student_number_allocator()()
         if not full_name:
             errors.append("Full name is required.")
-        if not student_number:
-            errors.append("Student ID is required.")
-        elif Student.query.filter_by(student_number=student_number).first():
+        if not generated_number and Student.query.filter(
+                db.func.lower(Student.student_number) == student_number.lower()).first():
             errors.append(f"Student ID '{student_number}' is already in use.")
         if not department_id:
             errors.append("Department is required.")
@@ -639,6 +710,8 @@ def admin_student_new():
         if parent_user:
             share_credentials(parent_user.full_name, parent_user.username, parent_password, "Parent / guardian")
         msg = f"Registered {full_name} ({student_number})."
+        if generated_number:
+            msg += f" The student ID {student_number} was generated because the field was left blank."
         if enrolled_courses:
             msg += f" Enrolled in: {', '.join(enrolled_courses)}."
         flash(msg, "success")
@@ -652,7 +725,7 @@ def admin_student_new():
 
 IMPORT_COLUMNS = ["full_name", "student_number", "department", "year_of_study", "email",
                   "course_codes", "counsellor_username", "parent_name", "parent_email", "parent_consent"]
-IMPORT_REQUIRED = ["full_name", "student_number", "department"]
+IMPORT_REQUIRED = ["full_name", "department"]   # a blank student_number gets the next free ID
 IMPORT_MAX_ROWS = 2000
 YES = {"yes", "y", "true", "1"}
 NO = {"no", "n", "false", "0", ""}
@@ -708,7 +781,7 @@ def _validate_import(rows):
         if not row["full_name"]:
             problems.append("full_name is empty")
         if not number:
-            problems.append("student_number is empty")
+            row["_generate"] = True
         elif number.lower() in existing_numbers:
             problems.append(f"student number {number} already exists")
         elif number.lower() in seen:
@@ -752,6 +825,11 @@ def _validate_import(rows):
             continue
         plan.append({"row": row, "department": dept, "year": year, "courses": course_list,
                      "counsellor": counsellor, "consent": consent in YES})
+    if not errors:
+        allocate = student_number_allocator(extra_taken=list(seen))
+        for item in plan:
+            if item["row"].get("_generate"):
+                item["row"]["student_number"] = allocate()
     return plan, errors
 
 
@@ -984,6 +1062,7 @@ def admin_student_unenroll(student_id, enrollment_id):
         return redirect(url_for("admin_student_profile", student_id=student.id))
 
     log_activity("enrolment.delete", f"{student.student_number} enrolment in {course_code} deleted with its records")
+    RiskSnapshot.query.filter_by(enrollment_id=enr.id).delete()
     AttendanceRecord.query.filter_by(enrollment_id=enr.id).delete()
     Assessment.query.filter_by(enrollment_id=enr.id).delete()
     RiskScore.query.filter_by(enrollment_id=enr.id).delete()
@@ -1538,7 +1617,71 @@ def admin_dashboard():
         total_students=total_students, total_courses=total_courses,
         scored=scored, high=high, medium=medium, low=low, notif_count=notif_count,
         dept_labels=dept_labels, dept_high=dept_high, dept_medium=dept_medium,
+        email=email_status(),
     )
+
+
+def email_status():
+    roles = sorted(mailer.alert_roles())
+    staff = User.query.filter(User.role.in_(roles), User.active.is_(True)).all() if roles else []
+    names = {"lecturer": "lecturers", "counsellor": "counsellors", "hod": "heads of department"}
+    roles_text = " and ".join(names.get(r, r + "s") for r in roles)
+    return {"enabled": mailer.enabled(), "from": mailer.mail_from(), "roles": roles, "roles_text": roles_text,
+            "missing": [u for u in staff if not u.email], "staff_total": len(staff),
+            "status": mailer.status, "admin_email": current_user.email}
+
+
+@app.route("/admin/email/test", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_email_test():
+    if not mailer.enabled():
+        flash("Email is not set up yet. Add RESEND_API_KEY and MAIL_FROM in Render, then redeploy.", "error")
+    elif not current_user.email:
+        flash("Add your own email address first (account menu → My profile), then send the test.", "error")
+    else:
+        ok, detail = mailer.send_test(current_user.email, current_user.first_name)
+        log_activity("email.test", f"to {current_user.email}: {'sent' if ok else 'failed'}")
+        db.session.commit()
+        if ok:
+            flash(f"Test email sent to {current_user.email}. Check the inbox (and the spam folder).", "success")
+        else:
+            flash(f"The test email could not be sent: {detail}", "error")
+    return redirect(url_for("admin_dashboard"))
+
+
+# ------------------------------------------------- Auto-refresh (FR-12) -----
+
+AUTO_REFRESH_ENDPOINTS = {"admin_dashboard", "lecturer_dashboard", "hod_dashboard", "counsellor_dashboard",
+                          "student_dashboard", "parent_dashboard", "all_notifications"}
+AUTO_REFRESH_SECONDS = int(os.environ.get("AUTO_REFRESH_SECONDS", "60"))
+
+
+def refresh_token():
+    """Changes whenever something this user's dashboard shows has changed: a new
+    alert for them, a recalculated risk score, or a new intervention note."""
+    notif = db.session.query(db.func.max(Notification.id)).filter(Notification.recipient_id == current_user.id).scalar()
+    q = db.session.query(db.func.max(RiskScore.last_computed), db.func.count(RiskScore.id))
+    if current_user.role in ("student", "parent"):
+        ids = ([s.id for s in Student.query.filter_by(user_id=current_user.id).all()] if current_user.role == "student"
+               else [s.id for s in Student.query.filter_by(parent_id=current_user.id).all()])
+        q = q.join(Enrollment, RiskScore.enrollment_id == Enrollment.id).filter(Enrollment.student_id.in_(ids or [0]))
+    latest, n = q.one()
+    notes = db.session.query(db.func.max(InterventionNote.id)).scalar()
+    return f"{notif or 0}-{latest.isoformat() if latest else 0}-{n}-{notes or 0}"
+
+
+@app.route("/api/refresh-state")
+@login_required
+def refresh_state():
+    return {"token": refresh_token()}
+
+
+@app.context_processor
+def inject_refresh():
+    if current_user.is_authenticated and request.endpoint in AUTO_REFRESH_ENDPOINTS and AUTO_REFRESH_SECONDS > 0:
+        return {"auto_refresh": {"seconds": AUTO_REFRESH_SECONDS, "token": refresh_token()}}
+    return {"auto_refresh": None}
 
 
 @app.route("/admin/seed", methods=["POST"])
@@ -1988,7 +2131,8 @@ def lecturer_assessment_grade(course_id, definition_id):
     entries = sorted(entries, key=lambda a: a.enrollment.student.user.full_name)
 
     if request.method == "POST":
-        affected = []
+        affected, out_of_range = [], []
+        top = definition.max_score
         for a in entries:
             raw = request.form.get(f"score_{a.id}", "").strip()
             if raw == "":
@@ -1996,11 +2140,21 @@ def lecturer_assessment_grade(course_id, definition_id):
                 a.submitted = False
             else:
                 try:
-                    a.score = max(0.0, min(definition.max_score, float(raw)))
-                    a.submitted = True
+                    value = float(raw)
                 except ValueError:
+                    value = None
+                if value is None or not math.isfinite(value):
                     flash(f"Ignored invalid score '{raw}' for {a.enrollment.student.user.full_name}.", "error")
+                elif value < 0 or value > top:
+                    out_of_range.append(f"{a.enrollment.student.user.full_name} ({raw})")
+                    continue   # keep the previous mark; don't change it silently (BUG-08)
+                else:
+                    a.score = value
+                    a.submitted = True
             affected.append(a.enrollment)
+        if out_of_range:
+            flash(f"Not saved: {len(out_of_range)} score(s) outside 0 to {top:g}: " + ", ".join(out_of_range)
+                  + ". Their previous marks are unchanged. Correct them and save again.", "error")
         db.session.flush()
 
         notif_count = 0
@@ -2161,16 +2315,24 @@ def counsellor_dashboard():
         if not risks:
             continue
         worst = max(risks, key=lambda r: r.risk_score)
-        if worst.risk_band == "Low":
+        if worst.risk_band not in ("Medium", "High"):
             continue
-        rows.append({"student": s, "risk": worst, "n_flagged_courses": sum(1 for r in risks if r.risk_band != "Low")})
+        rows.append({"student": s, "risk": worst,
+                     "n_flagged_courses": sum(1 for r in risks if r.risk_band in ("Medium", "High"))})
     rows.sort(key=lambda r: r["risk"].risk_score, reverse=True)
     notifications = (
         Notification.query.filter_by(recipient_id=current_user.id)
         .order_by(Notification.created_at.desc()).limit(15).all()
     )
     band_counts = analytics.band_counts([r["risk"] for r in rows])
-    return render_template("counsellor_dashboard.html", rows=rows, notifications=notifications, band_counts=band_counts)
+    today = local_now().date()
+    followups = (InterventionNote.query.join(Student, InterventionNote.student_id == Student.id)
+                 .filter(Student.counsellor_id == current_user.id, InterventionNote.follow_up_date.isnot(None),
+                         InterventionNote.status != "Resolved",
+                         InterventionNote.follow_up_date <= today + timedelta(days=7))
+                 .order_by(InterventionNote.follow_up_date).all())
+    return render_template("counsellor_dashboard.html", rows=rows, notifications=notifications,
+                           band_counts=band_counts, followups=followups, today=today)
 
 
 @app.route("/counsellor/student/<int:student_id>", methods=["GET", "POST"])
@@ -2181,13 +2343,23 @@ def counsellor_student_detail(student_id):
     if student.counsellor_id != current_user.id:
         abort(403)
     if request.method == "POST":
+        text_note = request.form.get("note", "").strip()
+        status, follow_up, error = _note_status_fields()
+        if not text_note:
+            error = error or "Write what was discussed or observed."
+        if error:
+            flash(error, "error")
+            return redirect(url_for("counsellor_student_detail", student_id=student.id))
         note = InterventionNote(
             student_id=student.id,
             author_id=current_user.id,
-            note=request.form.get("note", "").strip(),
+            note=text_note,
             action_taken=request.form.get("action_taken", "").strip(),
+            status=status, follow_up_date=follow_up,
         )
         db.session.add(note)
+        log_activity("intervention.add", f"{student.student_number}: {status}"
+                     + (f", follow up {follow_up:%d %b %Y}" if follow_up else ""))
         db.session.commit()
         flash("Intervention note logged.", "success")
         return redirect(url_for("counsellor_student_detail", student_id=student.id))
@@ -2198,7 +2370,52 @@ def counsellor_student_detail(student_id):
         .order_by(InterventionNote.created_at.desc()).all()
     )
     explanations = {r["enrollment"].id: get_ml_explanation(r["risk"]) for r in rows}
-    return render_template("student_detail.html", student=student, rows=rows, notes=notes, editable=True, explanations=explanations)
+    history = {}
+    for r in rows:
+        labels, values = analytics.risk_history_series(r["enrollment"].id)
+        if len(labels) > 1:
+            history[r["enrollment"].id] = {"labels": labels, "values": values}
+    return render_template("student_detail.html", student=student, rows=rows, notes=notes, editable=True,
+                           explanations=explanations, history=history, statuses=INTERVENTION_STATUSES,
+                           today=local_now().date())
+
+
+def _note_status_fields():
+    """Reads status and follow-up date from a form. Returns (status, date, error)."""
+    status = request.form.get("status", "Open")
+    if status not in INTERVENTION_STATUSES:
+        return None, None, "Choose a valid status."
+    raw = request.form.get("follow_up_date", "").strip()
+    follow_up = None
+    if raw:
+        try:
+            follow_up = datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            return None, None, "Choose a valid follow-up date."
+        if follow_up < local_now().date() and status != "Resolved":
+            return None, None, "The follow-up date can't be in the past."
+    if status == "Resolved":
+        follow_up = None
+    return status, follow_up, None
+
+
+@app.route("/counsellor/note/<int:note_id>/status", methods=["POST"])
+@login_required
+@role_required("counsellor")
+def counsellor_note_status(note_id):
+    note = InterventionNote.query.get_or_404(note_id)
+    if note.student.counsellor_id != current_user.id:
+        abort(403)
+    status, follow_up, error = _note_status_fields()
+    if error:
+        flash(error, "error")
+    else:
+        note.status, note.follow_up_date = status, follow_up
+        log_activity("intervention.update", f"{note.student.student_number}: {status}"
+                     + (f", follow up {follow_up:%d %b %Y}" if follow_up else ""))
+        db.session.commit()
+        flash(f"Updated the note to {status}.", "success")
+    return redirect(url_for("counsellor_student_detail", student_id=note.student_id))
 
 
 # ------------------------------------------------------------ Student ----
@@ -2219,9 +2436,11 @@ def student_dashboard():
         enr_id = r["enrollment"].id
         att_labels, att_values = analytics.student_attendance_series(enr_id)
         score_labels, score_values = analytics.student_score_series(enr_id)
+        hist_labels, hist_values = analytics.risk_history_series(enr_id)
         charts[enr_id] = {
             "att_labels": att_labels, "att_values": att_values,
             "score_labels": score_labels, "score_values": score_values,
+            "hist_labels": hist_labels, "hist_values": hist_values,
         }
     return render_template(
         "student_dashboard.html", student=student, rows=rows, notifications=notifications,
@@ -2293,10 +2512,10 @@ REPORT_DEFS = {
     },
     "intervention": {
         "title": "Intervention Report",
-        "fieldnames": ["student", "student_number", "date", "counsellor", "action_taken", "note"],
-        "labels": ["Student", "ID", "Date", "Counsellor", "Action taken", "Note"],
-        "description": "Logged counselling interventions for your caseload. Confidential — counsellor access only.",
-        "col_widths": [2.2, 1.3, 1.6, 2.2, 2.7, 4.0],
+        "fieldnames": ["student", "student_number", "date", "counsellor", "status", "follow_up", "action_taken", "note"],
+        "labels": ["Student", "ID", "Date", "Counsellor", "Status", "Follow-up", "Action taken", "Note"],
+        "description": "Logged counselling interventions for your caseload, with status and follow-up date. Confidential — counsellor access only.",
+        "col_widths": [2.0, 1.2, 1.5, 1.9, 1.5, 1.3, 2.2, 2.4],
     },
 }
 

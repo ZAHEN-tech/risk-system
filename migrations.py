@@ -31,7 +31,9 @@ Changes applied:
   5. enrollment: add status ('active' / 'withdrawn'), withdrawn_at,
      withdrawn_reason, withdrawn_by_id, so a lecturer can withdraw a student
      from a course without deleting their attendance and marks.
-  6. New tables (for example activity_log) are created if missing.
+  6. New tables (for example activity_log, risk_snapshot) are created if missing.
+  7. risk_score.data_quality (FR-10); intervention_note.status and
+     follow_up_date (FR-15).
 """
 from datetime import datetime
 from sqlalchemy import inspect, text
@@ -82,6 +84,13 @@ def run_migrations(db):
         if missing and "user" in tables:
             db.metadata.create_all(conn, tables=missing)
             _log("created table(s): " + ", ".join(t.name for t in missing))
+            if "risk_snapshot" in {t.name for t in missing} and "risk_score" in tables:
+                # Start the risk history (FR-11) from today's scores.
+                n = conn.execute(text(
+                    "INSERT INTO risk_snapshot (enrollment_id, taken_at, risk_score, risk_band, attendance_pct, "
+                    "assessment_avg, submission_rate) SELECT enrollment_id, COALESCE(last_computed, :now), risk_score, "
+                    "risk_band, attendance_pct, assessment_avg, submission_rate FROM risk_score"), {"now": datetime.utcnow()}).rowcount
+                _log(f"risk history started from {n} current score(s)")
             tables = set(inspect(conn).get_table_names())
 
         # ---- 1. user security columns ---------------------------------------
@@ -199,3 +208,16 @@ def run_migrations(db):
                 added.append("withdrawn_by_id")
             if added:
                 _log("enrollment: added " + ", ".join(added))
+
+        # ---- 7. data quality (FR-10), intervention status and follow-up (FR-15)
+        if "risk_score" in tables and "data_quality" not in _columns(conn, "risk_score"):
+            conn.execute(text("ALTER TABLE risk_score ADD COLUMN data_quality VARCHAR(12) DEFAULT 'good'"))
+            _log("risk_score: added data_quality")
+        if "intervention_note" in tables:
+            cols = _columns(conn, "intervention_note")
+            if "status" not in cols:
+                conn.execute(text("ALTER TABLE intervention_note ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'Open'"))
+                _log("intervention_note: added status")
+            if "follow_up_date" not in cols:
+                conn.execute(text("ALTER TABLE intervention_note ADD COLUMN follow_up_date DATE"))
+                _log("intervention_note: added follow_up_date")

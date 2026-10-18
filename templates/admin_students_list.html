@@ -56,7 +56,7 @@
         <td>{{ r.student.year_of_study }}</td>
         <td>
           {% if r.worst_risk %}
-            <span class="badge {{ r.worst_risk.risk_band|band_class }}">{{ r.worst_risk.risk_band }}</span>
+            {{ r.worst_risk|risk_badge(false) }}
           {% else %}
             <span class="badge risk-unknown">Not enrolled</span>
           {% endif %}

@@ -13,14 +13,17 @@
 <div class="panel">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
     <strong>{{ r.course.code }} — {{ r.course.name }}</strong>
-    {% if r.risk %}<span class="badge {{ r.risk.risk_band|band_class }}">{{ r.risk.risk_band }}</span>{% endif %}
+    {{ r.risk|risk_badge(false) }}
   </div>
-  {% if r.risk %}
+  {% if r.risk and r.risk.risk_band == 'No data' %}
+  <p class="subtext">There isn't enough information yet to estimate your risk in this course: no attendance or
+    marked work has been recorded. Your standing will appear here once your lecturer records them.</p>
+  {% elif r.risk %}
   <div class="subtext" style="margin-bottom:6px;">
     Attendance {{ r.risk.attendance_pct }}% · Assessment average {{ r.risk.assessment_avg }}% · Submission rate {{ r.risk.submission_rate }}%
   </div>
   <div class="meter"><span style="width:{{ 100 - r.risk.risk_score }}%"></span></div>
-  {% if r.risk.risk_band != 'Low' %}
+  {% if r.risk.risk_band in ('Medium', 'High') %}
   <p class="subtext" style="margin-top:8px;">
     This course has been flagged {{ r.risk.risk_band }} risk. Your lecturer and counsellor have been notified
     and are ready to help — consider booking a check-in.
@@ -38,6 +41,9 @@
   <div class="chart-row" style="margin-top:14px; margin-bottom:0;">
     {{ line('att-' ~ r.enrollment.id, 'Your attendance by week', c.att_labels, c.att_values, 'Present', '#A9793C', small=True) }}
     {{ line('score-' ~ r.enrollment.id, 'Your assessment scores', c.score_labels, c.score_values, 'Score %', '#1E2B45', small=True) }}
+    {% if c.hist_labels|length > 1 %}
+    {{ line('hist-' ~ r.enrollment.id, 'Your risk score over time', c.hist_labels, c.hist_values, 'Risk score', '#A2402F', small=True) }}
+    {% endif %}
   </div>
   {% endif %}
   {% else %}

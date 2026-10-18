@@ -25,16 +25,10 @@
       </td>
       {% endif %}
       {% if show_course %}<td>{{ r.course.code }}<div class="subtext">{{ r.course.name }}</div></td>{% endif %}
-      <td>{{ r.risk.attendance_pct if r.risk else '—' }}%</td>
-      <td>{{ r.risk.assessment_avg if r.risk else '—' }}%</td>
-      <td>{{ r.risk.submission_rate if r.risk else '—' }}%</td>
-      <td>
-        {% if r.risk %}
-          <span class="badge {{ r.risk.risk_band|band_class }}">{{ r.risk.risk_band }} · {{ r.risk.risk_score }}</span>
-        {% else %}
-          <span class="badge risk-unknown">Not scored</span>
-        {% endif %}
-      </td>
+      <td>{{ r.risk|pct('attendance_pct') }}</td>
+      <td>{{ r.risk|pct('assessment_avg') }}</td>
+      <td>{{ r.risk|pct('submission_rate') }}</td>
+      <td>{{ r.risk|risk_badge }}</td>
       {% if show_ml %}
       <td>
         {% if r.risk and r.risk.ml_band %}

@@ -15,6 +15,12 @@ from fpdf.enums import XPos, YPos
 from models import AttendanceRecord, InterventionNote
 
 
+def _offset():
+    import os
+    from datetime import timedelta
+    return timedelta(hours=float(os.environ.get("LOCAL_UTC_OFFSET_HOURS", "12")))
+
+
 # ---------------------------------------------------------------- Rows ----
 
 def performance_rows(enrollments):
@@ -81,9 +87,11 @@ def intervention_rows(students):
             rows.append({
                 "student": s.user.full_name,
                 "student_number": s.student_number,
-                "date": n.created_at.strftime("%Y-%m-%d %H:%M"),
+                "date": (n.created_at + _offset()).strftime("%Y-%m-%d %H:%M"),
                 "counsellor": n.author.full_name,
                 "action_taken": n.action_taken or "",
+                "status": n.status or "Open",
+                "follow_up": n.follow_up_date.strftime("%Y-%m-%d") if n.follow_up_date else "",
                 "note": n.note,
             })
     return rows

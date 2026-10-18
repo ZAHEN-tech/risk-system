@@ -9,7 +9,7 @@ the action and commits, so a failure leaves nothing half-deleted.
 """
 from models import (
     db, User, Department, Course, Student, Enrollment, AttendanceRecord, Assessment,
-    AssessmentDefinition, RiskScore, Notification, InterventionNote, ActivityLog,
+    AssessmentDefinition, RiskScore, RiskSnapshot, Notification, InterventionNote, ActivityLog,
 )
 
 # Activity-log entries a person makes just by using their account. Anything else
@@ -136,7 +136,7 @@ def delete_student(student):
     Returns the parent's name if the parent account was removed too."""
     enr_ids = [e.id for e in student.all_enrollments]
     if enr_ids:
-        for model in (AttendanceRecord, Assessment, RiskScore):
+        for model in (AttendanceRecord, Assessment, RiskScore, RiskSnapshot):
             model.query.filter(model.enrollment_id.in_(enr_ids)).delete(synchronize_session=False)
         for e in list(student.all_enrollments):
             db.session.delete(e)
@@ -224,7 +224,7 @@ def _forget_users(user_ids, delete_logs):
 
 
 def _delete_enrolments(enr_ids):
-    for model in (AttendanceRecord, Assessment, RiskScore):
+    for model in (AttendanceRecord, Assessment, RiskScore, RiskSnapshot):
         _delete_in(model, model.enrollment_id, enr_ids)
     return _delete_in(Enrollment, Enrollment.id, enr_ids)
 

@@ -18,7 +18,7 @@
       {% for r in entry.rows %}
       <tr>
         <td>{{ r.course.code }} — {{ r.course.name }}</td>
-        <td>{% if r.risk %}<span class="badge {{ r.risk.risk_band|band_class }}">{{ r.risk.risk_band }}</span>{% else %}<span class="badge risk-unknown">Not scored</span>{% endif %}</td>
+        <td>{{ r.risk|risk_badge(false) }}</td>
       </tr>
       {% endfor %}
     </tbody>

@@ -32,9 +32,10 @@ on its own. See risk_engine.model_agreement_summary() and the admin
 from datetime import datetime
 from models import (
     db, Enrollment, AttendanceRecord, Assessment, AssessmentDefinition, RiskScore,
-    Notification, Student, Course, Department, User
+    RiskSnapshot, Notification, Student, Course, Department, User
 )
 import ml_engine
+import mailer
 
 WEIGHTS = {
     "attendance": 0.35,
@@ -47,6 +48,8 @@ BAND_HIGH = 60
 BAND_MEDIUM = 30
 
 NOTIFY_ON_BAND = {"High", "Medium"}  # bands that trigger notifications
+NO_DATA = "No data"                    # band when there is nothing to score yet (FR-10)
+LIMITED_WEEKS = 3                      # fewer recorded weeks than this = "limited data"
 PARENT_NOTIFY_BAND = {"High"}         # only High risk reaches parents (and only with consent)
 
 
@@ -58,12 +61,27 @@ def _attendance_pct(enrollment_id):
     return round(100.0 * present / len(records), 1)
 
 
+def _marked_definition_ids(enrollment_id):
+    """Assessment items of this enrolment's course that the lecturer has started
+    marking (at least one student has a mark). Items that exist but have not been
+    marked yet are not counted as "not submitted"."""
+    enr = db.session.get(Enrollment, enrollment_id)
+    if enr is None:
+        return set()
+    rows = (db.session.query(Assessment.definition_id)
+            .join(AssessmentDefinition, Assessment.definition_id == AssessmentDefinition.id)
+            .filter(AssessmentDefinition.course_id == enr.course_id,
+                    db.or_(Assessment.submitted.is_(True), Assessment.score.isnot(None)))
+            .distinct().all())
+    return {r[0] for r in rows}
+
+
 def _assessment_stats(enrollment_id):
-    assessments = (
+    marked = _marked_definition_ids(enrollment_id)
+    assessments = [a for a in (
         Assessment.query.filter_by(enrollment_id=enrollment_id)
         .join(AssessmentDefinition, Assessment.definition_id == AssessmentDefinition.id)
-        .order_by(AssessmentDefinition.sequence).all()
-    )
+        .order_by(AssessmentDefinition.sequence).all()) if a.definition_id in marked]
     if not assessments:
         return 100.0, 100.0, 0.0
 
@@ -92,7 +110,33 @@ def _assessment_stats(enrollment_id):
     return avg, submission_rate, round(trend_penalty, 1)
 
 
+def data_quality(enrollment_id):
+    """(quality, weeks recorded, items marked) for an enrolment."""
+    weeks = AttendanceRecord.query.filter_by(enrollment_id=enrollment_id).count()
+    marked = _marked_definition_ids(enrollment_id)
+    items = (Assessment.query.filter(Assessment.enrollment_id == enrollment_id,
+                                     Assessment.definition_id.in_(marked)).count() if marked else 0)
+    if weeks == 0 and items == 0:
+        return "insufficient", weeks, items
+    if weeks < LIMITED_WEEKS or items == 0:
+        return "limited", weeks, items
+    return "good", weeks, items
+
+
+def _snapshot(rs):
+    """Adds a history row when the score or band differs from the last one (FR-11)."""
+    last = (RiskSnapshot.query.filter_by(enrollment_id=rs.enrollment_id)
+            .order_by(RiskSnapshot.taken_at.desc(), RiskSnapshot.id.desc()).first())
+    if last is not None and last.risk_band == rs.risk_band and last.risk_score == rs.risk_score:
+        return
+    db.session.add(RiskSnapshot(enrollment_id=rs.enrollment_id, taken_at=datetime.utcnow(),
+                                risk_score=rs.risk_score, risk_band=rs.risk_band,
+                                attendance_pct=rs.attendance_pct, assessment_avg=rs.assessment_avg,
+                                submission_rate=rs.submission_rate))
+
+
 def compute_risk_for_enrollment(enrollment_id):
+    quality, _weeks, _items = data_quality(enrollment_id)
     attendance_pct = _attendance_pct(enrollment_id)
     assessment_avg, submission_rate, trend_penalty = _assessment_stats(enrollment_id)
 
@@ -104,7 +148,9 @@ def compute_risk_for_enrollment(enrollment_id):
     )
     score = round(min(100.0, max(0.0, score)), 1)
 
-    if score >= BAND_HIGH:
+    if quality == "insufficient":
+        score, band = 0.0, NO_DATA
+    elif score >= BAND_HIGH:
         band = "High"
     elif score >= BAND_MEDIUM:
         band = "Medium"
@@ -125,11 +171,15 @@ def compute_risk_for_enrollment(enrollment_id):
     rs.risk_score = score
     rs.risk_band = band
 
-    ml_score, ml_band = ml_engine.predict(attendance_pct, assessment_avg, submission_rate, trend_penalty)
-    rs.ml_probability = ml_score
-    rs.ml_band = ml_band
+    if quality == "insufficient":
+        rs.ml_probability, rs.ml_band = None, None
+    else:
+        rs.ml_probability, rs.ml_band = ml_engine.predict(attendance_pct, assessment_avg, submission_rate, trend_penalty)
+    rs.data_quality = quality
 
     rs.last_computed = datetime.utcnow()
+    if quality != "insufficient":
+        _snapshot(rs)
 
     return rs, prev_band
 
@@ -137,7 +187,7 @@ def compute_risk_for_enrollment(enrollment_id):
 def get_ml_explanation(rs: RiskScore, top_n=4):
     """Per-student breakdown of which signal drives the ML model's score, for display
     on student/counsellor views."""
-    if rs is None or rs.attendance_pct is None:
+    if rs is None or rs.attendance_pct is None or rs.risk_band == NO_DATA:
         return []
     return ml_engine.explain(rs.attendance_pct, rs.assessment_avg, rs.submission_rate, rs.trend_penalty, top_n=top_n)
 
@@ -153,6 +203,7 @@ def _notify(recipient_id, student_id, course_id, message, severity):
         severity=severity,
     )
     db.session.add(n)
+    mailer.queue_alert(recipient_id, message, severity)
 
 
 def generate_notifications_for_enrollment(enrollment: Enrollment, rs: RiskScore, prev_band: str):
@@ -227,7 +278,8 @@ def recompute_all():
         db.session.flush()  # ensure rs.id / relationships are usable
         summary["notifications"] += generate_notifications_for_enrollment(e, rs, prev_band)
         summary["total"] += 1
-        summary[rs.risk_band.lower()] += 1
+        key = rs.risk_band.lower() if rs.risk_band != NO_DATA else "no_data"
+        summary[key] = summary.get(key, 0) + 1
     db.session.commit()
     return summary
 

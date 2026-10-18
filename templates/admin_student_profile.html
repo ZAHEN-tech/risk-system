@@ -70,7 +70,7 @@
       <td>{{ e.course.code }} — {{ e.course.name }}</td>
       <td>{{ e.withdrawn_reason or '—' }}</td>
       <td>{{ e.withdrawn_by.full_name if e.withdrawn_by else '—' }}</td>
-      <td>{{ e.withdrawn_at.strftime('%d %b %Y') if e.withdrawn_at else '—' }}</td>
+      <td>{{ (e.withdrawn_at|local).strftime('%d %b %Y') if e.withdrawn_at else '—' }}</td>
       <td style="white-space:nowrap;">
         <form method="post" action="{{ url_for('admin_student_enroll', student_id=student.id) }}" style="display:inline;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="course_id" value="{{ e.course_id }}">
@@ -93,8 +93,10 @@
   <h3>Intervention history</h3>
   {% for note in notes %}
   <div class="note-card">
-    <div class="note-meta">{{ note.author.full_name }} · {{ note.created_at.strftime('%d %b %Y, %H:%M') }}
+    <div class="note-meta">{{ note.author.full_name }} · {{ (note.created_at|local).strftime('%d %b %Y, %H:%M') }}
       {% if note.action_taken %} · Action: {{ note.action_taken }}{% endif %}</div>
+    <div class="note-status"><span class="status-pill status-{{ (note.status or 'Open')|lower|replace(' ', '-') }}">{{ note.status or 'Open' }}</span>
+      {% if note.follow_up_date %}<span class="subtext">Follow up {{ note.follow_up_date.strftime('%d %b %Y') }}</span>{% endif %}</div>
     <div>{{ note.note }}</div>
   </div>
   {% else %}

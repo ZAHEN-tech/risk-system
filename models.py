@@ -175,7 +175,24 @@ class RiskScore(db.Model):
     risk_band = db.Column(db.String(10))       # Low / Medium / High (rule-based)
     ml_probability = db.Column(db.Float)       # 0-100, higher = more at risk (logistic regression)
     ml_band = db.Column(db.String(10))         # Low / Medium / High (logistic regression)
+    # How much evidence the score rests on (FR-10): "insufficient" (no attendance
+    # and no marked work: band is "No data" and no alerts), "limited" (under 3
+    # weeks of attendance or no marked work yet) or "good".
+    data_quality = db.Column(db.String(12), default="good")
     last_computed = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class RiskSnapshot(db.Model):
+    """Risk history (FR-11): one row each time an enrolment's score or band
+    changes, so dashboards can show how a student's risk moved over the term."""
+    id = db.Column(db.Integer, primary_key=True)
+    enrollment_id = db.Column(db.Integer, db.ForeignKey("enrollment.id"), nullable=False, index=True)
+    taken_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    risk_score = db.Column(db.Float)
+    risk_band = db.Column(db.String(10))
+    attendance_pct = db.Column(db.Float)
+    assessment_avg = db.Column(db.Float)
+    submission_rate = db.Column(db.Float)
 
 
 class Notification(db.Model):
@@ -206,12 +223,18 @@ class ActivityLog(db.Model):
     user = db.relationship("User", foreign_keys=[user_id])
 
 
+INTERVENTION_STATUSES = ["Open", "Follow-up planned", "Referred", "Resolved"]
+
+
 class InterventionNote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey("student.id"), nullable=False, index=True)
     author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     note = db.Column(db.Text, nullable=False)
     action_taken = db.Column(db.String(200))
+    # FR-15: where the case stands and when to check in again.
+    status = db.Column(db.String(20), nullable=False, default="Open", server_default="Open")
+    follow_up_date = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     student = db.relationship("Student", foreign_keys=[student_id])

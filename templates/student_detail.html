@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_risk_table.html" import risk_table %}
+{% from "_charts.html" import line %}
 {% block title %}{{ student.user.full_name }} — Case file{% endblock %}
 {% block content %}
 <div class="eyebrow"><a href="{{ url_for('counsellor_dashboard') }}">← Caseload</a></div>
@@ -13,6 +14,18 @@
   <h3>Risk by course</h3>
   {{ risk_table(rows, show_student=False, show_ml=True) }}
 </div>
+
+{% if history %}
+<div class="panel">
+  <h3>Risk over time</h3>
+  <p class="subtext" style="margin-bottom:10px;">Each point is a change in the rule-based score (0 = no risk, 100 = highest).</p>
+  <div class="chart-row" style="margin-bottom:0;">
+    {% for r in rows %}{% set h = history.get(r.enrollment.id) %}{% if h %}
+    {{ line('hist-' ~ r.enrollment.id, r.course.code ~ ' risk score', h['labels'], h['values'], 'Risk score', '#A2402F', small=True) }}
+    {% endif %}{% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <div class="panel">
   <h3>What's driving the predictive model's score</h3>
@@ -49,6 +62,18 @@
       <label for="action_taken">Action taken</label>
       <input type="text" id="action_taken" name="action_taken" placeholder="e.g. Referred to academic support workshop">
     </div>
+    <div class="grid-2" style="gap:14px;">
+      <div class="field">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+          {% for st in statuses %}<option value="{{ st }}" {{ 'selected' if st == 'Follow-up planned' }}>{{ st }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="follow_up_date">Follow-up date <span class="subtext">(optional)</span></label>
+        <input type="date" id="follow_up_date" name="follow_up_date" min="{{ today.isoformat() }}">
+      </div>
+    </div>
     <button class="btn" type="submit">Save note</button>
   </form>
 </div>
@@ -58,9 +83,28 @@
   <h3>Intervention history</h3>
   {% for note in notes %}
   <div class="note-card">
-    <div class="note-meta">{{ note.author.full_name }} · {{ note.created_at.strftime('%d %b %Y, %H:%M') }}
+    <div class="note-meta">{{ note.author.full_name }} · {{ (note.created_at|local).strftime('%d %b %Y, %H:%M') }}
       {% if note.action_taken %} · Action: {{ note.action_taken }}{% endif %}</div>
+    <div class="note-status">
+      <span class="status-pill status-{{ (note.status or 'Open')|lower|replace(' ', '-') }}">{{ note.status or 'Open' }}</span>
+      {% if note.follow_up_date %}
+        {% set overdue = note.follow_up_date < today and note.status != 'Resolved' %}
+        <span class="subtext {{ 'overdue' if overdue }}">Follow up {{ note.follow_up_date.strftime('%d %b %Y') }}{{ ' (overdue)' if overdue }}</span>
+      {% endif %}
+    </div>
     <div>{{ note.note }}</div>
+    {% if editable %}
+    <details class="note-edit">
+      <summary>Update status</summary>
+      <form method="post" action="{{ url_for('counsellor_note_status', note_id=note.id) }}" class="note-edit-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <select name="status" aria-label="Status">
+          {% for st in statuses %}<option value="{{ st }}" {{ 'selected' if st == (note.status or 'Open') }}>{{ st }}</option>{% endfor %}
+        </select>
+        <input type="date" name="follow_up_date" aria-label="Follow-up date" value="{{ note.follow_up_date.isoformat() if note.follow_up_date else '' }}">
+        <button class="btn small" type="submit">Save</button>
+      </form>
+    </details>
+    {% endif %}
   </div>
   {% else %}
   <p class="subtext">No interventions logged yet.</p>

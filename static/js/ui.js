@@ -159,3 +159,52 @@
     countUp();
   });
 })();
+
+/* Auto-refresh (FR-12): dashboards check every minute whether anything they
+   show has changed (a new alert, a recalculated risk score, a new note) and
+   reload only then. Never while the person is typing in a form or the tab is
+   hidden: then a small "New updates" bar offers a refresh instead. */
+(function () {
+  var body = document.body;
+  if (!body || !body.dataset.autorefresh) return;
+  var every = Math.max(20, parseInt(body.dataset.autorefresh, 10) || 60) * 1000;
+  var token = body.dataset.refreshToken;
+  var url = body.dataset.refreshUrl;
+  var dirty = false;
+  document.addEventListener('input', function (e) {
+    if (e.target && e.target.closest && e.target.closest('form')) dirty = true;
+  });
+
+  function busy() {
+    var a = document.activeElement;
+    if (dirty) return true;
+    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+
+  function showBar() {
+    if (document.getElementById('refresh-bar')) return;
+    var bar = document.createElement('div');
+    bar.id = 'refresh-bar';
+    bar.className = 'refresh-bar';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = 'New updates are available. <button type="button" class="btn small">Refresh</button>';
+    bar.querySelector('button').addEventListener('click', function () { location.reload(); });
+    document.body.appendChild(bar);
+  }
+
+  function check() {
+    if (document.visibilityState !== 'visible') return;
+    fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !data.token || data.token === token) return;
+        if (busy()) { showBar(); } else { location.reload(); }
+      })
+      .catch(function () { /* offline or signed out: try again next time */ });
+  }
+
+  setInterval(check, every);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') check();
+  });
+})();

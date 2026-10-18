@@ -39,7 +39,7 @@
       {% set r = rows[e.id] %}
       <tr>
         <td>{{ e.student.user.full_name }}<div class="subtext">{{ e.student.student_number }}</div></td>
-        <td>{% if r.risk %}<span class="badge {{ r.risk.risk_band|band_class }}">{{ r.risk.risk_band }} · {{ r.risk.risk_score }}</span>{% else %}<span class="badge risk-unknown">Not scored</span>{% endif %}</td>
+        <td>{{ r.risk|risk_badge }}</td>
         <td>
           <form method="post" action="{{ url_for('lecturer_roster_withdraw', course_id=course.id, enrollment_id=e.id) }}" class="inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <select name="reason" aria-label="Reason for withdrawing {{ e.student.user.full_name }}">
@@ -67,7 +67,7 @@
       <tr>
         <td>{{ e.student.user.full_name }}<div class="subtext">{{ e.student.student_number }}</div></td>
         <td>{{ e.withdrawn_reason or '—' }}{% if e.withdrawn_by %}<div class="subtext">by {{ e.withdrawn_by.full_name }}</div>{% endif %}</td>
-        <td>{{ e.withdrawn_at.strftime('%d %b %Y') if e.withdrawn_at else '—' }}</td>
+        <td>{{ (e.withdrawn_at|local).strftime('%d %b %Y') if e.withdrawn_at else '—' }}</td>
         <td style="text-align:right;">
           <form method="post" action="{{ url_for('lecturer_roster_restore', course_id=course.id, enrollment_id=e.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn secondary small" type="submit">Restore</button>

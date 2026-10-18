@@ -58,10 +58,33 @@
 </div>
 
 <div class="panel">
+  <h3>Email alerts</h3>
+  {% if email.enabled %}
+  <p><span class="status-pill status-resolved">On</span> <span class="subtext">Sending from {{ email.from }} to
+    {{ email.roles_text }} when a student's risk rises to Medium or High.</span></p>
+  {% if email.missing %}
+  <p class="subtext">{{ email.missing|length }} of {{ email.staff_total }} {{ email.roles_text }} have no email address, so they
+    only get in-app alerts: {{ email.missing[:6]|map(attribute='full_name')|join(', ') }}{{ '…' if email.missing|length > 6 }}.
+    Add an address on each person's Edit page.</p>
+  {% endif %}
+  {% if email.status.sent or email.status.failed %}
+  <p class="subtext">Since the last restart: {{ email.status.sent }} sent, {{ email.status.failed }} failed{% if email.status.last_error %}. Last problem: {{ email.status.last_error }}{% endif %}.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('admin_email_test') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn secondary" type="submit">Send test email to {{ email.admin_email or 'me' }}</button></form>
+  {% else %}
+  <p><span class="status-pill status-open">Off</span> <span class="subtext">Alerts appear in the app only. To email them to
+    lecturers and counsellors, add <code>RESEND_API_KEY</code> and <code>MAIL_FROM</code> to the web service's
+    environment on Render, then redeploy.</span></p>
+  {% endif %}
+</div>
+
+<div class="panel">
   <h3>How risk is scored</h3>
   <p class="subtext">risk_score = 0.35 × (100 − attendance%) + 0.35 × (100 − assessment avg) +
     0.20 × (100 − submission rate) + 0.10 × trend penalty.<br>
-    Bands: ≥60 High · 30–59 Medium · &lt;30 Low. Weights are configurable in <code>risk_engine.py</code>
+    Bands: ≥60 High · 30–59 Medium · &lt;30 Low. A student with no attendance and no marked work yet shows
+    "Insufficient data" and triggers no alerts; under 3 weeks of attendance or no marked work is tagged "limited data". Weights are configurable in <code>risk_engine.py</code>
     and should be recalibrated against an institution's own historical outcome data over time.</p>
   <p class="subtext">A logistic-regression model trained on historical outcomes runs alongside this rule
     in shadow mode, scoring every enrollment for comparison without yet driving alerts on its own.</p>

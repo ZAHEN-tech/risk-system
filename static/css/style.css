@@ -462,3 +462,22 @@ textarea{min-height:90px; resize:vertical;}
 .bulk-check input{margin-top:3px;}
 .bulk-radios{display:flex; gap:18px; margin-bottom:10px;}
 .bulk-radios input{margin-right:6px;}
+
+/* Data quality tag (FR-10) */
+.data-note{display:inline-block; font-size:.72rem; color:var(--ink-soft); border:1px dashed var(--rule); border-radius:999px; padding:1px 7px; margin-left:4px; white-space:nowrap;}
+
+/* Intervention status and follow-up (FR-15) */
+.status-pill{display:inline-block; font-size:.74rem; font-weight:600; padding:2px 9px; border-radius:999px; border:1px solid var(--rule); background:var(--panel-2); color:var(--ink);}
+.status-open{color:var(--medium); border-color:color-mix(in srgb, var(--medium) 45%, var(--rule));}
+.status-follow-up-planned{color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, var(--rule));}
+.status-referred{color:var(--ink); border-color:var(--ink-soft);}
+.status-resolved{color:var(--low); border-color:color-mix(in srgb, var(--low) 45%, var(--rule));}
+.note-status{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:4px 0 6px;}
+.overdue{color:var(--high) !important; font-weight:600;}
+.note-edit{margin-top:8px;}
+.note-edit summary{cursor:pointer; font-size:.82rem; color:var(--ink-soft);}
+.note-edit-form{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;}
+.note-edit-form select, .note-edit-form input{padding:6px 9px; border:1px solid var(--rule); border-radius:3px; background:var(--panel); color:var(--ink);}
+
+/* Auto-refresh notice (FR-12) */
+.refresh-bar{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:60; background:var(--ink); color:var(--panel); padding:10px 14px; border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.18); display:flex; gap:12px; align-items:center; font-size:.9rem;}

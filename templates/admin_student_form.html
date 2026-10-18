@@ -20,7 +20,7 @@
     {% if mode == 'new' %}
     <div class="field">
       <label for="student_number">Student ID</label>
-      <input type="text" id="student_number" name="student_number" required value="{{ form.get('student_number','') }}">
+      <input type="text" id="student_number" name="student_number" value="{{ form.get('student_number','') }}" placeholder="Leave blank to generate the next ID">
     </div>
     {% else %}
     <div class="field">
