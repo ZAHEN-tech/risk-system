@@ -10,3 +10,4 @@ numpy>=1.26.4
 fpdf2>=2.7.9
 gunicorn>=22.0.0
 psycopg2-binary>=2.9.9
+qrcode>=7.4

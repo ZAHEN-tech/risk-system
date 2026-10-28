@@ -3,6 +3,7 @@
 {% from "_notif_list.html" import notif_list %}
 {% from "_charts.html" import donut, multibar %}
 {% block title %}Head of Department Dashboard{% endblock %}
+{% from "_gap_panel.html" import gap_panel %}
 {% block content %}
 <div class="eyebrow">Head of Department</div>
 <div class="page-title">
@@ -21,6 +22,8 @@
   {{ multibar('hod-lecturer-bar', 'High/Medium risk by lecturer', lecturer_labels,
       [{'label':'High','data':lecturer_high,'color':'#A2402F'}, {'label':'Medium','data':lecturer_medium,'color':'#B9821F'}]) }}
 </div>
+
+{{ gap_panel(gaps, gap_weeks, show_lecturer=true) }}
 
 <div class="panel">
   <h3>All students across the department, ranked by risk</h3>

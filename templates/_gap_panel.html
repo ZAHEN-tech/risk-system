@@ -1,0 +1,22 @@
+{% macro gap_panel(gaps, gap_weeks, show_lecturer=false) %}
+{% if gaps %}
+<div class="panel gap-panel">
+  <h3>Early warning: no marked assessment yet</h3>
+  <p class="subtext">These courses have {{ gap_weeks }} or more weeks of attendance recorded but nothing marked,
+    so their risk scores are based on attendance only. A student who is struggling academically won't show up
+    until the first marks are saved. An early quiz or short task helps.</p>
+  <table>
+    <thead><tr><th>Course</th>{% if show_lecturer %}<th>Lecturer</th>{% endif %}<th>Weeks recorded</th><th>Latest week</th><th>Items marked</th></tr></thead>
+    <tbody>
+      {% for g in gaps %}
+      <tr>
+        <td>{{ g.course.code }}<div class="subtext">{{ g.course.name }}</div></td>
+        {% if show_lecturer %}<td>{{ g.course.lecturer.full_name if g.course.lecturer else 'Unassigned' }}</td>{% endif %}
+        <td>{{ g.weeks }}</td><td>Week {{ g.latest_week }}</td><td><span class="pill risk-medium">None</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endmacro %}

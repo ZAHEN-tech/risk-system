@@ -239,3 +239,24 @@ class InterventionNote(db.Model):
 
     student = db.relationship("Student", foreign_keys=[student_id])
     author = db.relationship("User", foreign_keys=[author_id])
+
+
+class AttendanceSession(db.Model):
+    """A short-lived QR / code check-in for one teaching week of one course.
+    Students who scan the code while signed in are marked present; when the
+    lecturer closes the session, everyone else enrolled is marked absent."""
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("course.id"), nullable=False, index=True)
+    week = db.Column(db.Integer, nullable=False)
+    code = db.Column(db.String(8), unique=True, nullable=False, index=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    opened_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    checked_in = db.Column(db.Integer, default=0, nullable=False, server_default="0")
+
+    course = db.relationship("Course")
+
+    def is_open(self, now=None):
+        now = now or datetime.utcnow()
+        return self.closed_at is None and now < self.expires_at

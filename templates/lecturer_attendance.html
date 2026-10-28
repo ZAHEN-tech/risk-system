@@ -19,6 +19,38 @@
   </form>
 </div>
 
+{% if gap.flagged %}
+<div class="flash info" role="status">Early warning: {{ gap.weeks }} weeks of attendance are recorded but no assessment has
+  been marked yet, so risk scores here are based on attendance only. An early quiz or short task helps struggling students show up sooner.</div>
+{% endif %}
+
+<div class="panel">
+  <h3>QR code check-in</h3>
+  <p class="subtext">For large classes: show a QR code on the projector. Students scan it on their phone while signed in to
+    UniAlert and are marked present for the week. When you close the check-in, everyone who didn't check in is marked absent,
+    risk is recalculated and alerts go out. You can still correct the register afterwards.</p>
+  <form method="post" action="{{ url_for('lecturer_checkin_start', course_id=course.id) }}" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field" style="margin-bottom:0;"><label for="qr-week">Week</label>
+      <input type="number" id="qr-week" name="week" min="1" value="{{ week }}" style="width:100px;"></div>
+    <div class="field" style="margin-bottom:0;"><label for="qr-minutes">Open for</label>
+      <select id="qr-minutes" name="minutes">{% for m in [5,10,15,20,30] %}<option value="{{ m }}" {{ 'selected' if m==15 }}>{{ m }} minutes</option>{% endfor %}</select></div>
+    <button class="btn" type="submit">Start QR check-in</button>
+  </form>
+  {% if sessions %}
+  <table style="margin-top:14px;">
+    <thead><tr><th>Week</th><th>Opened</th><th>Checked in</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for x in sessions %}
+      <tr><td>{{ x.week }}</td><td>{{ x.opened_at|local }}</td><td>{{ x.checked_in }}</td>
+        <td>{% if x.closed_at %}Closed{% elif x.is_open() %}<span class="pill risk-low">Open</span>{% else %}Expired, not closed{% endif %}</td>
+        <td>{% if not x.closed_at %}<a class="btn secondary small" href="{{ url_for('lecturer_checkin', session_id=x.id) }}">Open</a>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
 <div class="panel">
   <h3>Week {{ week }} register</h3>
   <p class="subtext">Untick any student who was absent, then save. This updates their risk score and may

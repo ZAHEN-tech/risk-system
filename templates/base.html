@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head %}{% endblock %}
 </head>
 <body{% if auto_refresh %} data-autorefresh="{{ auto_refresh.seconds }}" data-refresh-token="{{ auto_refresh.token }}" data-refresh-url="{{ url_for('refresh_state') }}"{% endif %}>
 {% from "_ui.html" import icon, logo %}

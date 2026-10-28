@@ -2,6 +2,7 @@
 {% from "_risk_table.html" import risk_table %}
 {% from "_notif_list.html" import notif_list %}
 {% from "_charts.html" import donut, line %}
+{% from "_gap_panel.html" import gap_panel %}
 {% block title %}Lecturer Dashboard{% endblock %}
 {% block content %}
 <div class="eyebrow">Lecturer</div>
@@ -20,6 +21,19 @@
   {{ line('lect-attendance-line', 'Average attendance by week', att_labels, att_values, 'Attendance %', '#A9793C') }}
   {{ line('lect-score-line', 'Average assessment score by item', score_labels, score_values, 'Score %', '#1E2B45') }}
 </div>
+
+{% if open_sessions %}
+<div class="panel">
+  <h3>QR check-ins not yet closed</h3>
+  <p class="subtext">Close each one to mark students who didn't check in as absent.</p>
+  {% for s in open_sessions %}
+  <div class="btn-row" style="margin-top:6px;"><span>{{ s.course.code }} · week {{ s.week }} · {{ s.checked_in }} checked in</span>
+    <a class="btn secondary small" href="{{ url_for('lecturer_checkin', session_id=s.id) }}">Open</a></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{{ gap_panel(gaps, gap_weeks) }}
 
 <div class="panel">
   <h3>Your courses</h3>

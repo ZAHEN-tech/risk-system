@@ -16,11 +16,13 @@ from markupsafe import Markup, escape
 from models import (
     db, User, Department, Course, Student, Enrollment,
     AttendanceRecord, Assessment, AssessmentDefinition, ASSESSMENT_TYPES,
-    RiskScore, RiskSnapshot, Notification, InterventionNote, ActivityLog, INTERVENTION_STATUSES
+    RiskScore, RiskSnapshot, Notification, InterventionNote, ActivityLog, INTERVENTION_STATUSES,
+    AttendanceSession,
 )
 from risk_engine import (
     recompute_all, BAND_HIGH, BAND_MEDIUM, model_agreement_summary, get_ml_explanation,
     compute_risk_for_enrollment, generate_notifications_for_enrollment,
+    assessment_gap, assessment_gaps, GAP_WEEKS,
 )
 import seed_data
 import passwords
@@ -203,6 +205,8 @@ ACTIVITY_LABELS = {
     "bulk.delete": "Bulk delete", "log.clear": "Activity log cleared",
     "intervention.add": "Intervention logged", "intervention.update": "Intervention updated",
     "email.test": "Test email sent",
+    "checkin.open": "QR check-in opened", "checkin.close": "QR check-in closed",
+    "checkin.student": "Checked in to class",
 }
 
 
@@ -262,6 +266,9 @@ def login():
                 if user.must_change_password:
                     flash("Please choose a new password before continuing.", "info")
                     return redirect(url_for("change_password"))
+                nxt = request.args.get("next", "")
+                if user.role == "student" and nxt.startswith("/checkin") and "//" not in nxt:
+                    return redirect(nxt)   # back to the class check-in they scanned
                 return redirect(url_for(ROLE_HOME[user.role]))
         else:
             if user:
@@ -1617,7 +1624,7 @@ def admin_dashboard():
         total_students=total_students, total_courses=total_courses,
         scored=scored, high=high, medium=medium, low=low, notif_count=notif_count,
         dept_labels=dept_labels, dept_high=dept_high, dept_medium=dept_medium,
-        email=email_status(),
+        email=email_status(), gaps=assessment_gaps(Course.query.order_by(Course.code).all()),
     )
 
 
@@ -2003,6 +2010,10 @@ def lecturer_dashboard():
 
     return render_template(
         "lecturer_dashboard.html", courses=courses, rows=rows, notifications=notifications,
+        gaps=assessment_gaps(courses), gap_weeks=GAP_WEEKS,
+        open_sessions=[x for x in AttendanceSession.query.filter(
+            AttendanceSession.course_id.in_([c.id for c in courses] or [0]),
+            AttendanceSession.closed_at.is_(None)).all()],
         band_counts=band_counts, att_labels=att_labels, att_values=att_values,
         score_labels=score_labels, score_values=score_values,
     )
@@ -2038,6 +2049,7 @@ def lecturer_attendance(course_id):
         db.session.commit()
 
         flash(f"Attendance saved for week {week} ({len(enrollments)} students). {notif_count} new alert(s) generated.", "success")
+        flash_assessment_gap(course)
         return redirect(url_for("lecturer_attendance", course_id=course.id, week=week))
 
     week = request.args.get("week", type=int) or 1
@@ -2050,7 +2062,162 @@ def lecturer_attendance(course_id):
     recorded_weeks = sorted({
         r.week for r in AttendanceRecord.query.join(Enrollment).filter(Enrollment.course_id == course.id).all()
     })
-    return render_template("lecturer_attendance.html", course=course, rows=rows, week=week, recorded_weeks=recorded_weeks)
+    sessions = (AttendanceSession.query.filter_by(course_id=course.id)
+                .order_by(AttendanceSession.opened_at.desc()).limit(5).all())
+    return render_template("lecturer_attendance.html", course=course, rows=rows, week=week,
+                           recorded_weeks=recorded_weeks, sessions=sessions,
+                           gap=assessment_gap(course), gap_weeks=GAP_WEEKS)
+
+
+def flash_assessment_gap(course):
+    gap = assessment_gap(course)
+    if gap["flagged"]:
+        flash(f"Early warning: {gap['weeks']} weeks of attendance are recorded for {course.code} but no "
+              "assessment has been marked yet, so risk scores are based on attendance only. "
+              "Consider an early quiz or task so struggling students show up sooner.", "info")
+
+
+# ------------------------------------------------------- QR check-in -----
+
+CHECKIN_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"   # no 0/O, 1/I/L
+CHECKIN_MINUTES = (5, 10, 15, 20, 30)
+
+
+def _new_checkin_code():
+    while True:
+        code = "".join(secrets.choice(CHECKIN_ALPHABET) for _ in range(6))
+        if not AttendanceSession.query.filter_by(code=code).first():
+            return code
+
+
+def _qr_svg(text):
+    import qrcode
+    import qrcode.image.svg
+    img = qrcode.make(text, image_factory=qrcode.image.svg.SvgPathImage, box_size=12, border=2)
+    svg = img.to_string(encoding="unicode")
+    return Markup(svg[svg.find("<svg"):])
+
+
+@app.route("/lecturer/course/<int:course_id>/checkin/start", methods=["POST"])
+@login_required
+@role_required("lecturer")
+def lecturer_checkin_start(course_id):
+    course = owned_course_or_404(course_id)
+    week = request.form.get("week", type=int)
+    minutes = request.form.get("minutes", type=int) or 15
+    if not week or week < 1:
+        flash("Enter a valid week number.", "error")
+        return redirect(url_for("lecturer_attendance", course_id=course.id))
+    if minutes not in CHECKIN_MINUTES:
+        minutes = 15
+    now = datetime.utcnow()
+    for old in AttendanceSession.query.filter_by(course_id=course.id, week=week, closed_at=None).all():
+        if old.is_open(now):
+            flash(f"A check-in for week {week} is already open.", "info")
+            return redirect(url_for("lecturer_checkin", session_id=old.id))
+    s = AttendanceSession(course_id=course.id, week=week, code=_new_checkin_code(),
+                          created_by_id=current_user.id, opened_at=now,
+                          expires_at=now + timedelta(minutes=minutes))
+    db.session.add(s)
+    log_activity("checkin.open", f"{course.code} week {week}, {minutes} minutes")
+    db.session.commit()
+    return redirect(url_for("lecturer_checkin", session_id=s.id))
+
+
+def owned_session_or_404(session_id):
+    s = db.session.get(AttendanceSession, session_id)
+    if s is None:
+        abort(404)
+    owned_course_or_404(s.course_id)
+    return s
+
+
+@app.route("/lecturer/checkin/<int:session_id>")
+@login_required
+@role_required("lecturer")
+def lecturer_checkin(session_id):
+    s = owned_session_or_404(session_id)
+    course = s.course
+    present_ids = {r.enrollment_id for r in AttendanceRecord.query.join(Enrollment).filter(
+        Enrollment.course_id == course.id, AttendanceRecord.week == s.week,
+        AttendanceRecord.present.is_(True)).all()}
+    enrollments = sorted(course.enrollments, key=lambda e: e.student.user.full_name)
+    here = [e for e in enrollments if e.id in present_ids]
+    missing = [e for e in enrollments if e.id not in present_ids]
+    link = url_for("student_checkin", code=s.code, _external=True)
+    seconds_left = max(0, int((s.expires_at - datetime.utcnow()).total_seconds())) if s.closed_at is None else 0
+    return render_template("lecturer_checkin.html", s=s, course=course, here=here, missing=missing,
+                           link=link, qr=_qr_svg(link) if s.is_open() else None,
+                           seconds_left=seconds_left)
+
+
+@app.route("/lecturer/checkin/<int:session_id>/close", methods=["POST"])
+@login_required
+@role_required("lecturer")
+def lecturer_checkin_close(session_id):
+    s = owned_session_or_404(session_id)
+    if s.closed_at is not None:
+        flash("This check-in is already closed.", "info")
+        return redirect(url_for("lecturer_attendance", course_id=s.course_id, week=s.week))
+    course = s.course
+    enrollments = list(course.enrollments)
+    absent = 0
+    for enr in enrollments:
+        rec = AttendanceRecord.query.filter_by(enrollment_id=enr.id, week=s.week).first()
+        if rec is None:
+            db.session.add(AttendanceRecord(enrollment_id=enr.id, week=s.week, present=False))
+            absent += 1
+        elif not rec.present:
+            absent += 1
+    s.closed_at = datetime.utcnow()
+    db.session.flush()
+    notif_count = 0
+    for enr in enrollments:
+        rs, prev_band = compute_risk_for_enrollment(enr.id)
+        notif_count += generate_notifications_for_enrollment(enr, rs, prev_band)
+    log_activity("checkin.close", f"{course.code} week {s.week}: {len(enrollments) - absent} present, {absent} absent")
+    db.session.commit()
+    flash(f"Check-in closed. Week {s.week}: {len(enrollments) - absent} present, {absent} marked absent. "
+          f"{notif_count} new alert(s) generated. You can still correct the register below.", "success")
+    flash_assessment_gap(course)
+    return redirect(url_for("lecturer_attendance", course_id=course.id, week=s.week))
+
+
+@app.route("/checkin", methods=["GET", "POST"])
+@login_required
+@role_required("student")
+def student_checkin():
+    student = Student.query.filter_by(user_id=current_user.id).first_or_404()
+    code = (request.values.get("code") or "").strip().upper().replace(" ", "")
+    s = AttendanceSession.query.filter_by(code=code).first() if code else None
+    problem = None
+    enr = None
+    if code and s is None:
+        problem = "That check-in code was not recognised. Check it with your lecturer."
+    elif s is not None and not s.is_open():
+        problem = "This check-in has closed. Ask your lecturer to mark you present."
+    elif s is not None:
+        enr = Enrollment.query.filter_by(student_id=student.id, course_id=s.course_id, status="active").first()
+        if enr is None:
+            problem = f"You are not enrolled in {s.course.code}, so you can't check in to it."
+    if request.method == "POST" and s is not None and problem is None:
+        rec = AttendanceRecord.query.filter_by(enrollment_id=enr.id, week=s.week).first()
+        if rec is None:
+            db.session.add(AttendanceRecord(enrollment_id=enr.id, week=s.week, present=True))
+            s.checked_in = (s.checked_in or 0) + 1
+        elif not rec.present:
+            rec.present = True
+            s.checked_in = (s.checked_in or 0) + 1
+        else:
+            flash(f"You are already checked in for {s.course.code} week {s.week}.", "info")
+            return redirect(url_for("student_dashboard"))
+        log_activity("checkin.student", f"{s.course.code} week {s.week}")
+        db.session.flush()
+        compute_risk_for_enrollment(enr.id)
+        db.session.commit()
+        flash(f"You're checked in: {s.course.code} {s.course.name}, week {s.week}.", "success")
+        return redirect(url_for("student_dashboard"))
+    return render_template("student_checkin.html", code=code, s=s if problem is None else None, problem=problem)
 
 
 @app.route("/lecturer/course/<int:course_id>/assessments")
@@ -2295,6 +2462,7 @@ def hod_dashboard():
 
     return render_template(
         "hod_dashboard.html", dept=dept, courses=courses, rows=rows,
+        gaps=assessment_gaps(courses), gap_weeks=GAP_WEEKS,
         high=high, medium=medium, low=low,
         lecturer_breakdown=lecturer_breakdown, notifications=notifications,
         lecturer_labels=lecturer_labels, lecturer_high=lecturer_high, lecturer_medium=lecturer_medium,

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Check-in — {{ course.code }} week {{ s.week }}{% endblock %}
+{% block head %}{% if qr %}<meta http-equiv="refresh" content="10">{% endif %}{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('lecturer_attendance', course_id=course.id, week=s.week) }}">← Attendance</a></div>
+<div class="page-title"><h1>Check-in — {{ course.code }}, week {{ s.week }}</h1></div>
+
+<div class="grid-2">
+  <div class="panel" style="text-align:center;">
+    {% if qr %}
+    <h3>Scan to check in</h3>
+    <div class="qr-box">{{ qr }}</div>
+    <p style="font-size:15px; margin:10px 0 2px;">Or go to <strong>{{ link.split('?')[0] }}</strong> and enter</p>
+    <p class="checkin-code">{{ s.code }}</p>
+    <p class="subtext">Closes in about {{ (seconds_left // 60) }} min {{ seconds_left % 60 }} s · this page refreshes every 10 seconds</p>
+    {% elif s.closed_at %}
+    <h3>This check-in is closed</h3>
+    <p class="subtext">Closed {{ s.closed_at|local }}.</p>
+    {% else %}
+    <h3>Time is up</h3>
+    <p class="subtext">Students can no longer check in. Close it to mark everyone else absent.</p>
+    {% endif %}
+    {% if not s.closed_at %}
+    <form method="post" action="{{ url_for('lecturer_checkin_close', session_id=s.id) }}" style="margin-top:14px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit">Close check-in and save week {{ s.week }}</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="panel">
+    <h3>{{ here|length }} of {{ here|length + missing|length }} checked in</h3>
+    <div class="meter"><span style="width:{{ (100 * here|length / ((here|length + missing|length) or 1))|round }}%"></span></div>
+    <h4 style="margin-top:14px;">Not checked in yet ({{ missing|length }})</h4>
+    <ul class="plain-list">
+      {% for e in missing %}<li>{{ e.student.user.full_name }} <span class="subtext">{{ e.student.student_number }}</span></li>
+      {% else %}<li class="subtext">Everyone is here.</li>{% endfor %}
+    </ul>
+    <h4 style="margin-top:14px;">Checked in ({{ here|length }})</h4>
+    <ul class="plain-list">
+      {% for e in here %}<li>{{ e.student.user.full_name }} <span class="subtext">{{ e.student.student_number }}</span></li>
+      {% else %}<li class="subtext">No one yet.</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

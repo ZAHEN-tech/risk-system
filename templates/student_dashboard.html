@@ -9,6 +9,16 @@
 </div>
 <p class="subtext">{{ student.student_number }} · {{ student.department.name }} · Year {{ student.year_of_study }}</p>
 
+<div class="panel checkin-box">
+  <h3>Check in to class</h3>
+  <p class="subtext">Scan the QR code your lecturer shows, or type the 6-letter code here.</p>
+  <form method="get" action="{{ url_for('student_checkin') }}" class="inline-form" style="display:flex; gap:10px; align-items:flex-end;">
+    <div class="field" style="margin-bottom:0;"><label for="code">Check-in code</label>
+      <input id="code" name="code" maxlength="8" autocomplete="off" style="width:160px; text-transform:uppercase;" placeholder="e.g. K7MPQ2"></div>
+    <button class="btn" type="submit">Check in</button>
+  </form>
+</div>
+
 {% for r in rows %}
 <div class="panel">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">

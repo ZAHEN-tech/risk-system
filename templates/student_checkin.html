@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Check in to class{% endblock %}
+{% block content %}
+<div class="eyebrow"><a href="{{ url_for('student_dashboard') }}">← Your standing</a></div>
+<div class="page-title"><h1>Check in to class</h1></div>
+<div class="panel" style="max-width:560px;">
+  {% if problem %}
+  <div class="flash error" role="status">{{ problem }}</div>
+  {% endif %}
+  {% if s %}
+  <h3>{{ s.course.code }} — {{ s.course.name }}</h3>
+  <p class="subtext">Week {{ s.week }} · you are signed in as {{ current_user.full_name }}</p>
+  <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="code" value="{{ code }}">
+    <button class="btn" type="submit" style="margin-top:10px;">I'm here — check me in</button>
+  </form>
+  {% else %}
+  <form method="get" style="display:flex; gap:10px; align-items:flex-end;">
+    <div class="field" style="margin-bottom:0;"><label for="code">Check-in code</label>
+      <input id="code" name="code" maxlength="8" value="{{ code }}" autocomplete="off" style="width:160px; text-transform:uppercase;"></div>
+    <button class="btn" type="submit">Continue</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -9,7 +9,7 @@ the action and commits, so a failure leaves nothing half-deleted.
 """
 from models import (
     db, User, Department, Course, Student, Enrollment, AttendanceRecord, Assessment,
-    AssessmentDefinition, RiskScore, RiskSnapshot, Notification, InterventionNote, ActivityLog,
+    AssessmentDefinition, RiskScore, RiskSnapshot, Notification, InterventionNote, ActivityLog, AttendanceSession,
 )
 
 # Activity-log entries a person makes just by using their account. Anything else
@@ -42,6 +42,7 @@ def _remove_user(user):
         row.user_id = None
     Notification.query.filter_by(recipient_id=user.id).delete(synchronize_session=False)
     Enrollment.query.filter_by(withdrawn_by_id=user.id).update({"withdrawn_by_id": None}, synchronize_session=False)
+    AttendanceSession.query.filter_by(created_by_id=user.id).update({"created_by_id": None}, synchronize_session=False)
     db.session.delete(user)
 
 
@@ -80,6 +81,7 @@ def course_blockers(course):
 def delete_course(course):
     AssessmentDefinition.query.filter_by(course_id=course.id).delete(synchronize_session=False)
     Notification.query.filter_by(course_id=course.id).delete(synchronize_session=False)
+    AttendanceSession.query.filter_by(course_id=course.id).delete(synchronize_session=False)
     db.session.delete(course)
 
 
@@ -208,6 +210,8 @@ def _forget_users(user_ids, delete_logs):
     for part in _chunks(user_ids):
         Enrollment.query.filter(Enrollment.withdrawn_by_id.in_(part)).update(
             {"withdrawn_by_id": None}, synchronize_session=False)
+        AttendanceSession.query.filter(AttendanceSession.created_by_id.in_(part)).update(
+            {"created_by_id": None}, synchronize_session=False)
     _delete_in(Notification, Notification.recipient_id, user_ids)
     if delete_logs:
         return _delete_in(ActivityLog, ActivityLog.user_id, user_ids)
@@ -271,6 +275,7 @@ def bulk_delete_courses(course_ids):
     c["enrolments"] = _delete_enrolments(enr_ids)
     _delete_in(AssessmentDefinition, AssessmentDefinition.course_id, course_ids)
     _delete_in(Notification, Notification.course_id, course_ids)
+    _delete_in(AttendanceSession, AttendanceSession.course_id, course_ids)
     _delete_in(Course, Course.id, course_ids)
     db.session.expire_all()
     return c

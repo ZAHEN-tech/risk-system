@@ -110,6 +110,33 @@ def _assessment_stats(enrollment_id):
     return avg, submission_rate, round(trend_penalty, 1)
 
 
+GAP_WEEKS = 3   # weeks of attendance with nothing marked before a course is flagged
+
+
+def assessment_gap(course):
+    """Early-warning check for a course (lecturer feedback, final presentation):
+    once GAP_WEEKS teaching weeks of attendance are recorded but no assessment
+    has been marked, risk scores rest on attendance alone, so a student who is
+    struggling academically cannot be seen yet. Returns a dict with weeks
+    recorded, items marked and whether the course is flagged."""
+    weeks = {w for (w,) in db.session.query(AttendanceRecord.week)
+             .join(Enrollment, AttendanceRecord.enrollment_id == Enrollment.id)
+             .filter(Enrollment.course_id == course.id).distinct().all()}
+    marked = (db.session.query(AssessmentDefinition.id)
+              .join(Assessment, Assessment.definition_id == AssessmentDefinition.id)
+              .filter(AssessmentDefinition.course_id == course.id,
+                      db.or_(Assessment.submitted.is_(True), Assessment.score.isnot(None)))
+              .distinct().count())
+    latest = max(weeks) if weeks else 0
+    return {"course": course, "weeks": len(weeks), "latest_week": latest, "marked": marked,
+            "flagged": len(weeks) >= GAP_WEEKS and marked == 0}
+
+
+def assessment_gaps(courses):
+    """Flagged courses only, for dashboards."""
+    return [g for g in (assessment_gap(c) for c in courses) if g["flagged"]]
+
+
 def data_quality(enrollment_id):
     """(quality, weeks recorded, items marked) for an enrolment."""
     weeks = AttendanceRecord.query.filter_by(enrollment_id=enrollment_id).count()

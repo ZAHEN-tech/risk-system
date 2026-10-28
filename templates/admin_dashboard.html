@@ -2,6 +2,7 @@
 {% from "_charts.html" import donut, multibar %}
 {% from "_ui.html" import icon %}
 {% block title %}System Administration{% endblock %}
+{% from "_gap_panel.html" import gap_panel %}
 {% block content %}
 <div class="page-title">
   <div><h1>Good {{ greeting }}{% if current_user.full_name != 'System Administrator' %}, {{ current_user.first_name }}{% endif %}</h1>
@@ -40,6 +41,8 @@
   <a class="action-card" href="{{ url_for('admin_reports') }}"><span class="icon-wrap">{{ icon('reports', 20) }}</span>
     <span><strong>Reports</strong><span class="subtext">Download performance, risk and attendance reports.</span></span></a>
 </div>
+
+{{ gap_panel(gaps, 3, show_lecturer=true) }}
 
 <div class="panel">
   <h3>Data pipeline</h3>
